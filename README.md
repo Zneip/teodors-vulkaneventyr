@@ -1,6 +1,6 @@
-# Marit's Heart Stone Quest
+# Teodors Vulkaneventyr
 
-Mobiltilpasset endless runner laget i ren HTML, CSS og JavaScript. Spillet rendres hovedsakelig i HTML Canvas og har ingen eksterne rammeverk eller byggetrinn.
+Mobiltilpasset endless runner i vulkanlandskap laget i ren HTML, CSS og JavaScript. Teodor løper over størknet lava, hopper over lavaelver og unngår glødende lavasteiner.
 
 ## Lokal kjøring
 

@@ -7,19 +7,19 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Marits Quest" />
+    <meta name="apple-mobile-web-app-title" content="Teodors Vulkaneventyr" />
     <link rel="manifest" href="manifest.webmanifest?v=d391737311ea" />
     <link rel="icon" href="favicon.svg?v=10a021b63ca4" type="image/svg+xml" />
-    <title>Marits Heart Stone Quest</title>
+    <title>Teodors Vulkaneventyr</title>
   <link rel="stylesheet" href="styles.css?v=eba89845fccb" />
   </head>
   <body>
     <main class="game-shell">
-      <section class="game-frame" aria-label="Marits Heart Stone Quest">
+      <section class="game-frame" aria-label="Teodors Vulkaneventyr">
         <canvas id="game" aria-label="Spillområde. Trykk for å hoppe."></canvas>
 
         <header class="hud" aria-live="polite">
-          <div class="brand"><span class="brand-heart">♥</span><span>MARITS</span><small>HEART STONE QUEST</small></div>
+          <div class="brand"><span class="brand-heart">♥</span><span>TEODORS</span><small>VULKANEVENTYR</small></div>
           <div class="hud-right">
             <div class="metric"><span>REISE</span><strong id="distance">0 m</strong></div>
           </div>
@@ -124,7 +124,7 @@
             <header class="shop-header">
               <div class="shop-heading">
                 <p class="eyebrow">HYTTEBUTIKK</p>
-                <h2 id="shopTitle">Fjellhytta</h2>
+                <h2 id="shopTitle">Vulkanhytta</h2>
               </div>
               <div class="shop-header-status" aria-label="Status før kjøp">
                 <div id="shopStrengthStatus" class="strength-panel shop-strength-panel" role="meter" aria-label="Hoppekraft" aria-valuemin="5" aria-valuemax="100" aria-valuenow="100">
@@ -200,7 +200,7 @@
                     <path d="M24 18v-7h16v7M32 26v22M21 37h22"/>
                   </svg>
                 </span>
-                <span class="shop-item-copy"><strong>Førstehjelpspakke</strong><small>Beskytter mot steintreff. Du kan bære to.</small></span>
+                <span class="shop-item-copy"><strong>Førstehjelpspakke</strong><small>Beskytter mot lavasteintreff. Du kan bære to.</small></span>
                 <span class="shop-item-price" data-shop-price>10</span>
               </button>
               <button class="shop-item" type="button" data-shop-item="small-jump-broth">
@@ -233,7 +233,7 @@
                     <path class="boot-cuff" d="M9 8h20v9H9ZM35 8h19v9H35Z"/>
                   </svg>
                 </span>
-                <span class="shop-item-copy"><strong>Støvler</strong><small>Beskytter hjertene i elver. Hoppekraft og fart svekkes fortsatt.</small></span>
+                <span class="shop-item-copy"><strong>Støvler</strong><small>Beskytter hjertene i lavaelver. Hoppekraft og fart svekkes fortsatt.</small></span>
                 <span class="shop-item-price" data-shop-price>10</span>
               </button>
             </div>
@@ -294,7 +294,7 @@
 
         <section id="orientationBlocker" class="orientation-blocker" role="status" aria-live="polite" aria-label="Snu skjermen til landskapsmodus">
           <div class="orientation-card">
-            <div class="orientation-logo" aria-label="Marits Heart Stone Quest"><span>Marits</span><em>Heart Stone</em><span>Quest</span></div>
+            <div class="orientation-logo" aria-label="Teodors Vulkaneventyr"><span>Teodors</span><em>Vulkan</em><span>eventyr</span></div>
             <div class="rotate-phone" aria-hidden="true"><span></span></div>
             <h2>Snu skjermen</h2>
             <p>Spillet fortsetter automatisk i landskapsmodus.</p>
@@ -305,8 +305,8 @@
           <div class="screen-card">
             <div class="menu-grid">
               <div class="menu-primary">
-                <p class="eyebrow">EN FJELLFERD</p>
-                <h1>Marits<br /><em><button id="priceEditorButton" class="stone-debug" type="button" aria-label="Rediger butikkpriser">Heart</button> <button id="stoneDebugButton" class="stone-debug" type="button" aria-label="Start steinrasdebug">Stone</button></em><br />Quest</h1>
+                <p class="eyebrow">EN VULKANFERD</p>
+                <h1>Teodors<br /><em><button id="priceEditorButton" class="stone-debug" type="button" aria-label="Rediger butikkpriser">Vulkan</button></em><br /><button id="stoneDebugButton" class="stone-debug" type="button" aria-label="Start lavarasdebug">eventyr</button></h1>
                 <p class="difficulty-heading">VELG VANSKELIGHET</p>
                 <div class="difficulty-options" role="group" aria-label="Velg vanskelighetsgrad">
                   <button class="difficulty-button easy" type="button" data-difficulty="easy"><span>LETT</span></button>
@@ -345,21 +345,21 @@
                 <p class="eyebrow">TURHÅNDBOK</p>
                 <h2 id="howToPlayTitle">Hvordan spille</h2>
               </div>
-              <p>Kom lengst mulig gjennom Rondane, samle det du trenger og velg innkjøpene med omhu.</p>
+              <p>Kom lengst mulig gjennom vulkanlandskapet, samle det du trenger og velg innkjøpene med omhu.</p>
             </header>
             <div class="guide-columns">
               <section class="guide-column" aria-labelledby="gameplayGuideTitle">
-                <h3 id="gameplayGuideTitle">På fjellturen</h3>
+                <h3 id="gameplayGuideTitle">På vulkanturen</h3>
                 <div class="guide-list">
                   <article class="guide-item"><span class="guide-icon">↥</span><div><strong>Hopp</strong><p>Trykk og hold skjermen eller <kbd>Space</kbd>. Et langt trykk gir et høyere og lengre hopp.</p></div></article>
-                  <article class="guide-item"><span class="guide-icon fish-guide-icon">🐟</span><div><strong>Fisk og dobbelthopp</strong><p>Fang fisk som hopper opp av elvene. Trykk igjen i luften for å bruke én fisk og hoppe på nytt.</p></div></article>
+                  <article class="guide-item"><span class="guide-icon fish-guide-icon">🐟</span><div><strong>Fisk og dobbelthopp</strong><p>Fang fisk som hopper opp av lavaelvene. Trykk igjen i luften for å bruke én fisk og hoppe på nytt.</p></div></article>
                   <article class="guide-item"><span class="guide-icon distance-guide-icon">⌁</span><div><strong>Reise, vanskelighetsgrad og toppliste</strong><p>Reisemåleren er poengsummen din. Høyere vanskelighetsgrad gir større grunn- og toppfart. Vanlige turer kan registreres på den globale topplisten.</p></div></article>
                   <article class="guide-item"><span class="guide-icon heart-guide-icon">♥</span><div><strong>Hjerter og fart</strong><p>Hjerter er både liv og betalingsmiddel. Hvert hjerte øker farten ett trinn; et hindringstreff senker den ett trinn.</p></div></article>
-                  <article class="guide-item"><span class="guide-icon meter-guide-icon">▰</span><div><strong>Hoppekraft</strong><p>Lav hoppekraft gir lavere hopp. Elver og regn svekker den, men den stopper på et minimum så du kan kjempe deg videre.</p></div></article>
-                  <article class="guide-item"><span class="guide-icon water-guide-icon">≈</span><div><strong>Elver og regn</strong><p>Elver koster hjerte, fart og hoppekraft. Regn tapper hoppekraft og gjør elvene bredere.</p></div></article>
-                  <article class="guide-item"><span class="guide-icon rock-guide-icon">◆</span><div><strong>Steiner og steinras</strong><p>Hopp oppå eller over steinene. Treff tar omtrent en tredel av hjertene og blir farligere utover turen.</p></div></article>
+                  <article class="guide-item"><span class="guide-icon meter-guide-icon">▰</span><div><strong>Hoppekraft</strong><p>Lav hoppekraft gir lavere hopp. Lavaelver og askeregn svekker den, men den stopper på et minimum så du kan kjempe deg videre.</p></div></article>
+                  <article class="guide-item"><span class="guide-icon water-guide-icon">≈</span><div><strong>Lavaelver og askeregn</strong><p>Lavaelver koster hjerte, fart og hoppekraft. Askeregn tapper hoppekraft og gjør lavaelvene bredere.</p></div></article>
+                  <article class="guide-item"><span class="guide-icon rock-guide-icon">◆</span><div><strong>Lavasteiner og lavaras</strong><p>Hopp oppå eller over lavasteinene. Treff tar omtrent en tredel av hjertene og blir farligere utover turen.</p></div></article>
                   <article class="guide-item"><span class="guide-icon fire-guide-icon">♨</span><div><strong>Bål</strong><p>Et bål koster hjerter, stanser turen kort og fyller hoppekraften. På PC kan du bruke <kbd>B</kbd>.</p></div></article>
-                  <article class="guide-item"><span class="guide-icon hut-guide-icon">⌂</span><div><strong>Hytter</strong><p>Marit stanser trygt ved hyttene. Trykk på salgsboden for å handle, eller velg Fortsett for å gå videre.</p></div></article>
+                  <article class="guide-item"><span class="guide-icon hut-guide-icon">⌂</span><div><strong>Hytter</strong><p>Teodor stanser trygt ved hyttene. Trykk på salgsboden for å handle, eller velg Fortsett for å gå videre.</p></div></article>
                   <article class="guide-item"><span class="guide-icon controls-guide-icon">Ⅱ</span><div><strong>Pause, lyd, fullskjerm og avslutt</strong><p>Bruk knappene på skjermen. På PC er <kbd>P</kbd> pause og <kbd>Q</kbd> avslutt. Lyd og fullskjerm styres øverst til høyre.</p></div></article>
                 </div>
               </section>
@@ -371,9 +371,9 @@
                   <article class="guide-item"><span class="guide-icon broth-guide-icon">☕</span><div><strong>Hoppebuljong</strong><p>Fyller hoppekraftmåleren helt opp med én gang.</p></div></article>
                   <article class="guide-item"><span class="guide-icon broth-guide-icon">☕</span><div><strong>Liten hoppebuljong</strong><p>Fyller opp en femdel av hoppekraftmåleren med én gang. Du kan kjøpe maksimalt to per hyttebesøk.</p></div></article>
                   <article class="guide-item"><span class="guide-icon snack-guide-icon">▥</span><div><strong>Kvikklunsj</strong><p>Gir gratis dobbelthopp i en kort periode. Brukes med utstyrsknappen eller <kbd>K</kbd> på PC.</p></div></article>
-                  <article class="guide-item"><span class="guide-icon aid-guide-icon">✚</span><div><strong>Førstehjelpspakke</strong><p>Beskytter automatisk mot neste steintreff. Marit kan bære to pakker.</p></div></article>
+                  <article class="guide-item"><span class="guide-icon aid-guide-icon">✚</span><div><strong>Førstehjelpspakke</strong><p>Beskytter automatisk mot neste lavasteintreff. Teodor kan bære to pakker.</p></div></article>
                   <article class="guide-item"><span class="guide-icon hat-guide-icon">⌒</span><div><strong>Sydvest</strong><p>Hindrer regn i å tappe hoppekraft resten av turen.</p></div></article>
-                  <article class="guide-item"><span class="guide-icon boots-guide-icon">♜</span><div><strong>Støvler</strong><p>Beskytter hjertene i elver. Du mister fortsatt hoppekraft og ett fartstrinn.</p></div></article>
+                  <article class="guide-item"><span class="guide-icon boots-guide-icon">♜</span><div><strong>Støvler</strong><p>Beskytter hjertene i lavaelver. Du mister fortsatt hoppekraft og ett fartstrinn.</p></div></article>
                 </div>
               </section>
             </div>
@@ -384,7 +384,7 @@
         <section id="gameOverScreen" class="screen hidden">
           <div class="screen-card">
             <p class="eyebrow">TURSLUTT</p>
-            <h2>Marit trenger<br />flere hjerter</h2>
+            <h2>Teodor trenger<br />flere hjerter</h2>
             <p id="finalScore"></p>
             <p id="newRecord" class="record"></p>
             <form id="scoreForm" class="score-form">

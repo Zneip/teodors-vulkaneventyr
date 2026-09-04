@@ -125,5 +125,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`Marits Heart Stone Quest kjører på port ${port}`);
+  console.log(`Teodors Vulkaneventyr kjører på port ${port}`);
 });
