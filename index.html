@@ -14,6 +14,15 @@
   <link rel="stylesheet" href="styles.css?v=eba89845fccb" />
   </head>
   <body>
+    <svg class="icon-sprite" aria-hidden="true" focusable="false">
+      <symbol id="skeletonFish" viewBox="0 0 48 30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 15 3 6l3 9-3 9 11-9" />
+        <path d="M12 15h23" />
+        <path d="M17 10v10M21 8v14M25 7v16M29 8v14M33 10v10" />
+        <path d="M34 15c0-6 4-9 9-5l-3 5 3 5c-5 4-9 1-9-5Z" />
+        <path d="m37 12 3 3m0-3-3 3" />
+      </symbol>
+    </svg>
     <main class="game-shell">
       <section class="game-frame" aria-label="Teodors Vulkaneventyr">
         <canvas id="game" aria-label="Spillområde. Trykk for å hoppe."></canvas>
@@ -41,12 +50,12 @@
             <strong id="hearts">15</strong>
           </div>
           <div id="fishMeter" class="fish-meter" aria-label="0 dobbelthopp">
-            <span class="fish-slot"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-            <span class="fish-slot"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-            <span class="fish-slot"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M11 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-            <span class="fish-slot locked"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-            <span class="fish-slot locked"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-            <span class="fish-slot locked"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
+            <span class="fish-slot"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+            <span class="fish-slot"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+            <span class="fish-slot"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+            <span class="fish-slot locked"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+            <span class="fish-slot locked"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+            <span class="fish-slot locked"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
           </div>
         </div>
 
@@ -132,12 +141,12 @@
                   <span class="strength-label">HOPPEKRAFT</span>
                 </div>
                 <div id="shopFishMeter" class="fish-meter shop-fish-meter" aria-label="0 av 3 fisker i sekken">
-                  <span class="fish-slot shop-fish-slot"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-                  <span class="fish-slot shop-fish-slot"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-                  <span class="fish-slot shop-fish-slot"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-                  <span class="fish-slot shop-fish-slot locked"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-                  <span class="fish-slot shop-fish-slot locked"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
-                  <span class="fish-slot shop-fish-slot locked"><svg viewBox="0 0 48 30" aria-hidden="true"><path class="fish-tail" d="M14 15 2 5l3 10-3 10 12-10Z"/><path class="fish-body" d="M11 15C18 3 35 4 45 15 35 26 18 27 11 15Z"/><circle cx="36" cy="12" r="1.8"/></svg></span>
+                  <span class="fish-slot shop-fish-slot"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+                  <span class="fish-slot shop-fish-slot"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+                  <span class="fish-slot shop-fish-slot"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+                  <span class="fish-slot shop-fish-slot locked"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+                  <span class="fish-slot shop-fish-slot locked"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
+                  <span class="fish-slot shop-fish-slot locked"><svg class="skeleton-fish" viewBox="0 0 48 30" aria-hidden="true"><use href="#skeletonFish" /></svg></span>
                 </div>
                 <div class="shop-wallet" aria-label="Tilgjengelige hjerter">
                   <span aria-hidden="true">♥</span>
@@ -152,8 +161,7 @@
                     <path class="bag-handle" d="M22 19c1-9 19-9 20 0"/>
                     <path class="bag-body" d="M15 20h34l5 35H10Z"/>
                     <path class="bag-fold" d="M15 20c8 6 26 6 34 0"/>
-                    <path class="bag-fish" d="M29 39l-7-5 2 5-2 5 7-5c5-8 15-6 20 0-5 7-15 8-20 0Z"/>
-                    <circle class="bag-fish-eye" cx="43" cy="37.5" r="1.5"/>
+                    <use class="skeleton-fish" href="#skeletonFish" x="25" y="30" width="28" height="18" />
                   </svg>
                 </span>
                 <span class="shop-item-copy"><strong>Større sekk</strong><small>Gir plass til én fisk til. Maks seks.</small></span>
@@ -161,11 +169,7 @@
               </button>
               <button class="shop-item" type="button" data-shop-item="fish">
                 <span class="shop-item-icon fish-shop-icon" aria-hidden="true">
-                  <svg viewBox="0 0 64 64">
-                    <path d="M22 32 7 18l4 14-4 14 15-14Z"/>
-                    <path d="M18 32c9-17 31-15 42 0-11 15-33 17-42 0Z"/>
-                    <circle cx="49" cy="27" r="2"/>
-                  </svg>
+                  <svg class="skeleton-fish" viewBox="0 0 48 30"><use href="#skeletonFish" /></svg>
                 </span>
                 <span class="shop-item-copy"><strong>Fisk</strong><small>Gir ett dobbelthopp. Krever ledig plass i sekken.</small></span>
                 <span class="shop-item-price" data-shop-price>3</span>
@@ -216,24 +220,27 @@
                 <span class="shop-item-price" data-shop-price>1</span>
               </button>
               <button class="shop-item" type="button" data-shop-item="rain-hat">
-                <span class="shop-item-icon rain-hat-shop-icon" aria-hidden="true">
+                <span class="shop-item-icon helmet-shop-icon" aria-hidden="true">
                   <svg viewBox="0 0 64 64">
-                    <path class="rain-hat-crown" d="M18 35c1-15 8-24 17-24s16 9 17 24Z"/>
-                    <path class="rain-hat-brim" d="M10 34c12 4 32 4 46 0l3 9c-17 6-36 6-52 0Z"/>
+                    <path class="helmet-dome" d="M15 37c0-17 8-28 18-28 11 0 18 11 18 28Z"/>
+                    <path class="helmet-guard" d="M11 37h45l-4 12H17Z"/>
+                    <path class="helmet-visor" d="M25 22h26l-4 9H25Z"/>
+                    <path class="helmet-plume" d="M31 10c-4-7 7-10 6-2 4-5 9 1 3 7"/>
                   </svg>
                 </span>
-                <span class="shop-item-copy"><strong>Sydvest</strong><small>Beskytter hoppekraften mot regn resten av turen.</small></span>
+                <span class="shop-item-copy"><strong>Hjelm</strong><small>Beskytter hoppekraften mot regn resten av turen.</small></span>
                 <span class="shop-item-price" data-shop-price>15</span>
               </button>
               <button class="shop-item" type="button" data-shop-item="boots">
                 <span class="shop-item-icon boots-shop-icon" aria-hidden="true">
                   <svg viewBox="0 0 64 64">
-                    <path class="boot-body" d="M10 8h18v33c0 5 7 6 17 7 8 1 11 4 9 9H13c-3 0-5-3-4-7Z"/>
-                    <path class="boot-body" d="M36 8h17v30c0 4 4 6 7 8v11H39c-3 0-5-3-4-7Z"/>
-                    <path class="boot-cuff" d="M9 8h20v9H9ZM35 8h19v9H35Z"/>
+                    <path class="lava-boot" d="M10 8h18v33c0 5 7 6 17 7 8 1 11 4 9 9H13c-3 0-5-3-4-7Z"/>
+                    <path class="lava-boot" d="M36 8h17v30c0 4 4 6 7 8v11H39c-3 0-5-3-4-7Z"/>
+                    <path class="lava-cuff" d="M9 8h20v9H9ZM35 8h19v9H35Z"/>
+                    <path class="lava-crack" d="m18 22 5 7-4 8m25-16-3 8 5 8"/>
                   </svg>
                 </span>
-                <span class="shop-item-copy"><strong>Støvler</strong><small>Beskytter hjertene i lavaelver. Hoppekraft og fart svekkes fortsatt.</small></span>
+                <span class="shop-item-copy"><strong>Lavastøvler</strong><small>Beskytter hjertene i lavaelver. Hoppekraft og fart svekkes fortsatt.</small></span>
                 <span class="shop-item-price" data-shop-price>10</span>
               </button>
             </div>
@@ -280,8 +287,8 @@
               <label>Kvikklunsj <input type="number" min="0" max="999" step="1" inputmode="numeric" data-price-field="kvikklunsj" required /></label>
               <label>Førstehjelpspakke <input type="number" min="0" max="999" step="1" inputmode="numeric" data-price-field="first-aid" required /></label>
               <label>Ekstra førstehjelpspakke <input type="number" min="0" max="999" step="1" inputmode="numeric" data-price-field="first-aid-extra" required /></label>
-              <label>Sydvest <input type="number" min="0" max="999" step="1" inputmode="numeric" data-price-field="rain-hat" required /></label>
-              <label>Støvler <input type="number" min="0" max="999" step="1" inputmode="numeric" data-price-field="boots" required /></label>
+              <label>Hjelm <input type="number" min="0" max="999" step="1" inputmode="numeric" data-price-field="rain-hat" required /></label>
+              <label>Lavastøvler <input type="number" min="0" max="999" step="1" inputmode="numeric" data-price-field="boots" required /></label>
             </div>
             <p id="priceEditorStatus" class="price-editor-status" aria-live="polite"></p>
             <div class="price-editor-actions">
@@ -372,8 +379,8 @@
                   <article class="guide-item"><span class="guide-icon broth-guide-icon">☕</span><div><strong>Liten hoppebuljong</strong><p>Fyller opp en femdel av hoppekraftmåleren med én gang. Du kan kjøpe maksimalt to per hyttebesøk.</p></div></article>
                   <article class="guide-item"><span class="guide-icon snack-guide-icon">▥</span><div><strong>Kvikklunsj</strong><p>Gir gratis dobbelthopp i en kort periode. Brukes med utstyrsknappen eller <kbd>K</kbd> på PC.</p></div></article>
                   <article class="guide-item"><span class="guide-icon aid-guide-icon">✚</span><div><strong>Førstehjelpspakke</strong><p>Beskytter automatisk mot neste lavasteintreff. Teodor kan bære to pakker.</p></div></article>
-                  <article class="guide-item"><span class="guide-icon hat-guide-icon">⌒</span><div><strong>Sydvest</strong><p>Hindrer regn i å tappe hoppekraft resten av turen.</p></div></article>
-                  <article class="guide-item"><span class="guide-icon boots-guide-icon">♜</span><div><strong>Støvler</strong><p>Beskytter hjertene i lavaelver. Du mister fortsatt hoppekraft og ett fartstrinn.</p></div></article>
+                  <article class="guide-item"><span class="guide-icon hat-guide-icon">⛑</span><div><strong>Hjelm</strong><p>Hindrer regn i å tappe hoppekraft resten av turen.</p></div></article>
+                  <article class="guide-item"><span class="guide-icon boots-guide-icon">♨</span><div><strong>Lavastøvler</strong><p>Beskytter hjertene i lavaelver. Du mister fortsatt hoppekraft og ett fartstrinn.</p></div></article>
                 </div>
               </section>
             </div>
