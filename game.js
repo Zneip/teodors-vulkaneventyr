@@ -97,6 +97,8 @@
   const HEART_SPEED_STEP = 1;
   const SPEED_EASE = 2.2;
   const ROCK_HIT_DURATION = .72;
+  const DRAGON_START_DISTANCE = 40000;
+  const DRAGON_FLIGHT_DURATION = 8.8;
   const MAX_SMALL_JUMP_BROTHS_PER_REST = 2;
   const SHOP_CATALOG = Object.freeze({
     'fish-slot':{price:10},
@@ -179,7 +181,7 @@
   function difficultyFor(key){return DIFFICULTIES[key]||DIFFICULTIES.normal;}
   function detectScorePlatform(){return window.matchMedia?.('(hover: hover) and (pointer: fine)').matches?'desktop':'mobile';}
   function difficultyLabel(key){return DIFFICULTIES[key]?.label||'Ukjent';}
-  function freshState(difficultyKey=selectedDifficulty) { return { running:false, paused:false, tutorialPaused:false, tutorialQueue:[], ended:false, debugMode:false, introTimer:0, t:0, distance:0, speed:difficultyFor(difficultyKey).startRunSpeed, speedBoost:0, speedBoostTarget:0, difficulty:difficultyFor(difficultyKey), platform:detectScorePlatform(), rockfallSpeedScale:1, hearts:15, heartLossAnimation:null, doubleJumps:0, maxFishSlots:3, kvikklunsj:0, snackBoostTimer:0, firstAid:0, rainHat:false, boots:false, smallJumpBrothPurchases:0, shopOpen:false, shopSnapshot:null, quitConfirmOpen:false, strength:1, player:{x:W/7,y:ground-58,vy:0,w:33,h:58,onGround:true,inv:0,jumpHeld:false,jumpHold:0,airJumped:false,jumpBoost:1}, objects:[], splashes:[], rockImpacts:[], rockHitTimer:0, spawn:1.3, riverSafeTimer:0, rain:0, rainClock:rand(20,34), rainDuration:0, rainStrengthDrainRemaining:0, rainStrengthDrainRate:0, weatherPhase:'clear', weatherTimer:0, skyDarkness:0, stormCloudCover:0, sunGlow:0, avalancheClock:0, avalancheLeadIn:0, plannedAvalancheDuration:0, avalancheDuration:0, avalancheLevel:0, boulderSpawn:0, rumbleClock:0, flash:0, bolt:null, lightningClock:rand(3,6), thunderClock:0, hitShake:0, promptTimer:0, prompt:'', danger:false, backgroundOffset:0, fireGlow:0, nextHeart:1.1, nextRestDistance:REST_STOP_INTERVAL, restIndex:0, restTimer:0, restStop:null, restDeferred:false }; }
+  function freshState(difficultyKey=selectedDifficulty) { return { running:false, paused:false, tutorialPaused:false, tutorialQueue:[], ended:false, debugMode:false, introTimer:0, t:0, distance:0, speed:difficultyFor(difficultyKey).startRunSpeed, speedBoost:0, speedBoostTarget:0, difficulty:difficultyFor(difficultyKey), platform:detectScorePlatform(), rockfallSpeedScale:1, hearts:15, heartLossAnimation:null, doubleJumps:0, maxFishSlots:3, kvikklunsj:0, snackBoostTimer:0, firstAid:0, rainHat:false, boots:false, smallJumpBrothPurchases:0, shopOpen:false, shopSnapshot:null, quitConfirmOpen:false, strength:1, player:{x:W/7,y:ground-58,vy:0,w:33,h:58,onGround:true,inv:0,jumpHeld:false,jumpHold:0,airJumped:false,jumpBoost:1}, objects:[], splashes:[], rockImpacts:[], rockHitTimer:0, spawn:1.3, riverSafeTimer:0, rain:0, rainClock:rand(20,34), rainDuration:0, rainStrengthDrainRemaining:0, rainStrengthDrainRate:0, weatherPhase:'clear', weatherTimer:0, skyDarkness:0, stormCloudCover:0, sunGlow:0, dragon:null, dragonClock:8, avalancheClock:0, avalancheLeadIn:0, plannedAvalancheDuration:0, avalancheDuration:0, avalancheLevel:0, boulderSpawn:0, rumbleClock:0, flash:0, bolt:null, lightningClock:rand(3,6), thunderClock:0, hitShake:0, promptTimer:0, prompt:'', danger:false, backgroundOffset:0, fireGlow:0, nextHeart:1.1, nextRestDistance:REST_STOP_INTERVAL, restIndex:0, restTimer:0, restStop:null, restDeferred:false }; }
   function syncHelpVisibility(){const hidden=HelpVisibilityStore.hidden();ui.helpToggles.forEach(toggle=>{toggle.checked=hidden;});}
   function setHelpVisibility(hidden){HelpVisibilityStore.set(hidden);syncHelpVisibility();if(hidden&&state?.tutorialPaused){state.tutorialPaused=false;state.tutorialQueue=[];ui.tutorial.classList.add('hidden');last=performance.now();}}
   function openHowToPlay(){ui.start.classList.add('hidden');ui.howToPlay.classList.remove('hidden');}
@@ -200,11 +202,12 @@
   function replayClass(element,className,duration=600){element.classList.remove(className);void element.offsetWidth;element.classList.add(className);setTimeout(()=>element.classList.remove(className),duration);}
   function animateHeartGain(){replayClass(ui.heartCounter,'gain',560)}
   function animateHeartLoss(){replayClass(ui.heartCounter,'loss',520)}
-  function animateRockHeartLoss(from,to){
+  function animateRockHeartLoss(from,to,fromPlayer=false){
     const lost=Math.max(0,from-to);if(!lost)return;
     replayClass(ui.heartCounter,'drain',620);
     state.heartLossAnimation={from,to,elapsed:0,duration:Math.min(.82,.38+lost*.025),displayValue:from};
-    const frameRect=ui.frame.getBoundingClientRect(),heartShape=ui.heartCounter.querySelector('.heart-shape'),heartRect=heartShape.getBoundingClientRect(),heartStyle=getComputedStyle(heartShape),startX=heartRect.left-frameRect.left+heartRect.width*.5,startY=heartRect.top-frameRect.top+heartRect.height*.5,count=Math.min(14,lost);
+    const frameRect=ui.frame.getBoundingClientRect(),heartShape=ui.heartCounter.querySelector('.heart-shape'),heartRect=heartShape.getBoundingClientRect(),heartStyle=getComputedStyle(heartShape),canvasRect=canvas.getBoundingClientRect();
+    const startX=fromPlayer?canvasRect.left-frameRect.left+(state.player.x+state.player.w*.5)*canvasRect.width/W:heartRect.left-frameRect.left+heartRect.width*.5,startY=fromPlayer?canvasRect.top-frameRect.top+(state.player.y+state.player.h*.4)*canvasRect.height/H:heartRect.top-frameRect.top+heartRect.height*.5,count=Math.min(14,lost);
     for(let i=0;i<count;i++){const particle=document.createElement('span'),endX=-startX-rand(55,115),endY=rand(-155,-75),midX=endX*.48+rand(-12,12),midY=endY*.48+rand(-18,18),rotation=rand(-135,135),delay=i*52+rand(0,28);particle.className='lost-heart-particle';particle.textContent=heartShape.textContent||'♥';particle.style.left=`${startX}px`;particle.style.top=`${startY}px`;particle.style.fontSize=heartStyle.fontSize;particle.style.fontFamily=heartStyle.fontFamily;particle.style.fontWeight=heartStyle.fontWeight;particle.style.lineHeight=heartStyle.lineHeight;particle.style.setProperty('--heart-mid-x',`${midX}px`);particle.style.setProperty('--heart-mid-y',`${midY}px`);particle.style.setProperty('--heart-end-x',`${endX}px`);particle.style.setProperty('--heart-end-y',`${endY}px`);particle.style.setProperty('--heart-mid-rotation',`${rotation*.48}deg`);particle.style.setProperty('--heart-rotation',`${rotation}deg`);particle.style.animationDelay=`${delay}ms`;ui.frame.appendChild(particle);setTimeout(()=>particle.remove(),1350+delay);}
   }
   function updateHeartLossAnimation(dt){const animation=state?.heartLossAnimation;if(!animation)return false;animation.elapsed+=dt;const progress=clamp(animation.elapsed/animation.duration,0,1),eased=1-Math.pow(1-progress,2.2);animation.displayValue=Math.max(animation.to,animation.from-Math.floor((animation.from-animation.to)*eased));if(progress>=1)state.heartLossAnimation=null;return true;}
@@ -294,13 +297,13 @@
     state.spawn -= dt; state.nextHeart -= dt;
     if (state.spawn <= 0) {
       const lateRivers=state.distance>=60000,midRivers=state.distance>=30000,creekChance=lateRivers?.7:.55,r=Math.random();
-      if (!restStopRiverClearanceActive()&&state.riverSafeTimer<=0&&r < creekChance) {
+      if (!restStopRiverClearanceActive()&&!dragonClearanceActive()&&state.riverSafeTimer<=0&&r < creekChance) {
         const baseWidth=lateRivers?rand(165,230)*(Math.random()<.62?1.18:1):midRivers?rand(128,188)*(Math.random()<.5?1.16:1):rand(85,142)*(Math.random()<.35?1.35:1),creekX=80,fishChance=state.distance>=50000?.39:.78;
         addObject('creek',{x:creekX,width:baseWidth,baseWidth,rainGrowth:state.rain*.35,seed:Math.random()*100});if(Math.random()<fishChance)addObject('fish',{x:creekX+baseWidth*.52,y:ground+8,width:27,height:15,triggered:false,leapTime:0,leap:0,currentY:ground+8});state.spawn = rand(2.2, 3.4);
       } else { if(Math.random()<.5)addObject('bush',{width:rand(48,87),height:rand(28,45), x:rand(40,150)}); state.spawn = rand(.8,1.45); }
     }
     if (state.nextHeart <= 0) { const heartDelay=state.distance>=50000?2:1;addObject('heart',{x:rand(90,210), y:ground-rand(113,180),width:25,height:25, bob:Math.random()*6.28}); state.nextHeart = rand(2.2,4.1)*heartDelay; }
-    if (state.avalancheDuration > 0) {
+    if (state.avalancheDuration > 0 && !dragonInProgress()) {
       state.boulderSpawn -= dt;
       if (state.boulderSpawn <= 0) {
         const extremeRockfall=state.distance>=100000,sizeRoll=Math.random(),size=extremeRockfall?(sizeRoll<.2?48:sizeRoll<.6?72:73):(sizeRoll<.51?48:sizeRoll<.85?72:73),isRolling=Math.random()*100<debugSettings.rollingShare,distancePastRocks=Math.max(0,(state.distance-20000)/50000),distanceScale=Math.max(.28,1/(1+distancePastRocks*.32)),avalancheScale=Math.max(.45,1/(1+Math.max(0,state.avalancheLevel-1)*.18)),extremeSpawnScale=extremeRockfall?.55:1;
@@ -315,6 +318,8 @@
     else if(state.weatherPhase==='raining'){state.rainDuration-=dt;state.rain=clamp(state.rain+dt*.55,0,1);state.skyDarkness=1;state.stormCloudCover=1;if(!state.rainHat&&state.rainStrengthDrainRemaining>0&&state.strength>MIN_STRENGTH){const loss=Math.min(state.rainStrengthDrainRemaining,state.rainStrengthDrainRate*dt,state.strength-MIN_STRENGTH);state.strength-=loss;state.rainStrengthDrainRemaining-=loss;}if(state.rainDuration<=0){state.weatherPhase='clearing';state.weatherTimer=0;state.rainStrengthDrainRemaining=0;state.rainStrengthDrainRate=0;showPrompt('Askeregnet gir seg – skyene driver bort.',2.6);}}
     else if(state.weatherPhase==='clearing'){state.weatherTimer+=dt;const clear=clamp(state.weatherTimer/5,0,1);state.rain=clamp(1-state.weatherTimer/1.8,0,1);state.stormCloudCover=1-clear;state.skyDarkness=1-clear;if(clear>=1){state.weatherPhase='clear';state.rain=0;state.skyDarkness=0;state.stormCloudCover=0;state.sunGlow=8;state.rainClock=rand(34,50);}}
     syncRainStrengthEffect();
+    updateDragon(dt);
+    if(dragonInProgress()||state.ended)return;
     if (state.distance >= 20000 && state.avalancheClock <= 0 && state.avalancheLeadIn <= 0 && state.avalancheDuration <= 0) { const d=distanceDifficulty();state.avalancheClock=rand(Math.max(7,15-d*2),Math.max(13,30-d*4)); }
     if (state.avalancheClock > 0) { state.avalancheClock -= dt; if (state.avalancheClock <= 0) { state.avalancheLevel++;state.avalancheLeadIn=1.45;state.plannedAvalancheDuration=state.avalancheLevel===1?rand(6,8):rand(8,12);state.rumbleClock=0;sounds.rumble();showPrompt('VARSEL: LAVARAS!',3,true); } }
     if(state.avalancheLeadIn>0){state.avalancheLeadIn-=dt;if(state.avalancheLeadIn<=0){state.avalancheLeadIn=0;state.avalancheDuration=state.plannedAvalancheDuration;state.boulderSpawn=.05;}}
@@ -322,6 +327,13 @@
   }
   function collide(a, b) { return a.x < b.x+b.width && a.x+a.w > b.x && a.y < b.y+b.height && a.y+a.h > b.y; }
   function loseHeart() { state.hearts--;animateHeartLoss();sounds.splash();if(state.hearts<=0)endGame(); }
+  function applyImpactDamage(fromPlayer=false){
+    if(state.hearts<=0){endGame();return;}
+    decreaseRunSpeed();
+    const heartsBeforeHit=state.hearts,lost=Math.min(state.hearts,Math.max(1,Math.ceil(state.hearts*.3)));
+    state.hearts-=lost;animateRockHeartLoss(heartsBeforeHit,state.hearts,fromPlayer);
+    if(state.hearts===0)endGame();
+  }
   function addSplash(x,y){const drops=Array.from({length:13},(_,i)=>({x:0,y:0,vx:(i-6)*27+rand(-18,18),vy:rand(-260,-115),r:rand(2,5)}));state.splashes.push({x,y,age:0,drops});}
   function addRockImpact(x,y){
     const particles=Array.from({length:20},(_,i)=>{const angle=i/20*Math.PI*2+rand(-.18,.18),speed=rand(95,245);return{x:0,y:0,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed-rand(20,85),size:rand(2.2,5.4),warm:i%3===0};});
@@ -329,9 +341,85 @@
   }
   function naturalTravelTime(distance){const rampTime=(ORIGINAL_MAX_RUN_SPEED-BASE_RUN_SPEED)/2.55,rampDistance=(BASE_RUN_SPEED*rampTime+1.275*rampTime*rampTime)/5.4;if(distance<=rampDistance)return(-BASE_RUN_SPEED+Math.sqrt(BASE_RUN_SPEED*BASE_RUN_SPEED+4*1.275*distance*5.4))/(2*1.275);return rampTime+(distance-rampDistance)/(ORIGINAL_MAX_RUN_SPEED/5.4);}
   function rockfallInProgress(){return Boolean(state?.avalancheLeadIn>0||state?.avalancheDuration>0||state?.objects.some(o=>o.type==='boulder'&&o.x+o.width>0));}
+  function dragonInProgress(){return Boolean(state?.dragon);}
+  function drawDragon(){
+    const dragon=state.dragon;if(!dragon)return;
+    const pose=dragonPose(dragon),flames=dragonFlames(dragon),flap=Math.sin(dragon.age*9)*24;
+    ctx.save();
+    if(flames.length){
+      const fire=ctx.createLinearGradient(flames.at(-1).x,0,pose.x-70,0);
+      fire.addColorStop(0,'#ef4a19');fire.addColorStop(.55,'#ff7924');fire.addColorStop(1,'#ffe388');
+      ctx.fillStyle=fire;ctx.shadowColor='#ff631e';ctx.shadowBlur=16;ctx.beginPath();
+      for(const f of flames){ctx.moveTo(f.x+f.r,f.y);ctx.arc(f.x,f.y,f.r,0,Math.PI*2);}ctx.fill();
+      ctx.shadowBlur=0;ctx.fillStyle='#ffe9a0';ctx.beginPath();
+      for(const f of flames){ctx.moveTo(f.x+f.r*.48,f.y);ctx.arc(f.x,f.y,f.r*.48,0,Math.PI*2);}ctx.fill();
+    }
+    ctx.translate(pose.x,pose.y);ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle='#2b1829';
+    // Far wing and a curling tail behind the body.
+    ctx.fillStyle='#643442';ctx.beginPath();ctx.moveTo(-5,-6);ctx.quadraticCurveTo(24,-50,55,-79-flap*.6);ctx.lineTo(98,-25-flap*.3);ctx.quadraticCurveTo(62,-39,48,-12);ctx.quadraticCurveTo(28,-29,12,8);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#663143';ctx.beginPath();ctx.moveTo(29,-9);ctx.bezierCurveTo(66,-7,80,32,118,12);ctx.quadraticCurveTo(140,0,137,-17);ctx.quadraticCurveTo(148,18,118,31);ctx.bezierCurveTo(80,48,59,15,30,18);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#d5814e';for(let i=0;i<5;i++){const x=30+i*16,y=-11+i*5;ctx.beginPath();ctx.moveTo(x,y+4);ctx.lineTo(x+5,y-9);ctx.lineTo(x+13,y+9);ctx.closePath();ctx.fill();}
+    // Body, belly and tucked legs stay well above a grounded Teodor.
+    ctx.fillStyle='#773d4f';ctx.beginPath();ctx.ellipse(2,1,44,25,-.06,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#ce9566';ctx.beginPath();ctx.ellipse(-8,12,29,12,.13,0,Math.PI*2);ctx.fill();
+    for(const x of [-24,23]){ctx.fillStyle='#673346';ctx.beginPath();ctx.moveTo(x,14);ctx.quadraticCurveTo(x-13,29,x-5,37);ctx.lineTo(x-21,36);ctx.lineTo(x-16,41);ctx.lineTo(x+2,41);ctx.quadraticCurveTo(x+6,30,x+11,18);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle='#f1d59c';ctx.beginPath();ctx.moveTo(x-17,37);ctx.lineTo(x-22,40);ctx.moveTo(x-9,38);ctx.lineTo(x-13,42);ctx.stroke();ctx.strokeStyle='#2b1829';}
+    // Bat-like front wing: animated membrane with three visible wing fingers.
+    const wingY=-88-flap;
+    ctx.fillStyle='#a64c43';ctx.beginPath();ctx.moveTo(-16,-2);ctx.quadraticCurveTo(-9,-50,28,wingY);ctx.lineTo(82,-32-flap*.45);ctx.quadraticCurveTo(53,-40,43,-9);ctx.quadraticCurveTo(25,-28,15,6);ctx.quadraticCurveTo(0,-8,-16,-2);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.strokeStyle='#54283b';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-16,-2);ctx.quadraticCurveTo(-9,-50,28,wingY);ctx.lineTo(43,-9);ctx.moveTo(28,wingY);ctx.lineTo(15,6);ctx.moveTo(28,wingY);ctx.lineTo(82,-32-flap*.45);ctx.stroke();
+    // Curved neck, horned head and a bright eye facing the oncoming player.
+    ctx.strokeStyle='#2b1829';ctx.lineWidth=2;ctx.fillStyle='#773d4f';ctx.beginPath();ctx.moveTo(-23,-17);ctx.bezierCurveTo(-42,-41,-51,-17,-53,0);ctx.lineTo(-69,1);ctx.quadraticCurveTo(-82,5,-80,17);ctx.lineTo(-58,22);ctx.quadraticCurveTo(-43,22,-40,10);ctx.quadraticCurveTo(-34,-3,-26,12);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#f0d4a0';ctx.beginPath();ctx.moveTo(-53,-8);ctx.quadraticCurveTo(-46,-21,-32,-26);ctx.lineTo(-42,-4);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#3b1c29';ctx.beginPath();ctx.moveTo(-79,16);ctx.lineTo(-57,17);ctx.lineTo(-63,dragon.breathing?29:23);ctx.lineTo(-79,dragon.breathing?24:20);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#8e4853';ctx.beginPath();ctx.moveTo(-62,dragon.breathing?29:23);ctx.lineTo(-80,dragon.breathing?26:22);ctx.lineTo(-78,dragon.breathing?31:26);ctx.lineTo(-59,dragon.breathing?33:28);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#ffdd66';ctx.shadowColor='#ff8b25';ctx.shadowBlur=6;ctx.beginPath();ctx.ellipse(-62,6,5,3,-.2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#251b24';ctx.fillRect(-64,3,2,6);ctx.beginPath();ctx.arc(-77,11,1.4,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff1cb';ctx.beginPath();ctx.moveTo(-72,17);ctx.lineTo(-69,22);ctx.lineTo(-66,17);ctx.closePath();ctx.fill();
+    ctx.restore();
+  }
+  function dragonClearanceActive(){return dragonInProgress()||(state.distance>=DRAGON_START_DISTANCE&&state.dragonClock<=2&&!rockfallInProgress());}
+  function dragonPose(dragon){return {x:dragon.x,y:ground-state.player.h-82+Math.sin(dragon.age*3.4)*5};}
+  function dragonFlames(dragon){
+    const elapsed=dragon.age-2,cycle=elapsed%2.1;
+    if(elapsed<0||elapsed>4.9||cycle>=1.35)return [];
+    const strength=Math.min(1,cycle/.18,(1.35-cycle)/.2);
+    if(strength<=.05)return [];
+    const pose=dragonPose(dragon),mouthX=pose.x-76,mouthY=pose.y+18;
+    return Array.from({length:23},(_,index)=>{const u=index/22;return {x:mouthX-270*strength*u,y:mouthY+16*u+Math.sin(dragon.age*20-index*.6)*2*Math.sin(u*Math.PI),r:(6+18*Math.sin(u*Math.PI))*strength};});
+  }
+  function dragonTouchesPlayer(dragon,flames){
+    const p=state.player;
+    // Ground safety is explicit, in addition to keeping all fire above head height.
+    if(p.onGround||p.y+p.h>=ground-1||p.inv>0)return false;
+    const pose=dragonPose(dragon);
+    if(collide(p,{x:pose.x-35,y:pose.y-15,width:82,height:37})||collide(p,{x:pose.x-74,y:pose.y+2,width:35,height:27}))return true;
+    return flames.some(flame=>{const dx=flame.x-clamp(flame.x,p.x+4,p.x+p.w-4),dy=flame.y-clamp(flame.y,p.y+4,p.y+p.h-4);return dx*dx+dy*dy<Math.max(0,flame.r-2)**2;});
+  }
+  function updateDragon(dt){
+    if(dt<=0)return;
+    if(state.dragon){
+      const dragon=state.dragon;
+      dragon.age+=dt;dragon.x=W+140-(W+460)*dragon.age/DRAGON_FLIGHT_DURATION;
+      if(dragon.age>=DRAGON_FLIGHT_DURATION){state.dragon=null;state.dragonClock=rand(24,38);state.avalancheClock=Math.max(4,state.avalancheClock);state.riverSafeTimer=Math.max(2,state.riverSafeTimer);return;}
+      const flames=dragonFlames(dragon),breathing=flames.length>0;
+      if(breathing&&!dragon.breathing)sounds.fire();
+      dragon.breathing=breathing;
+      if(dragonTouchesPlayer(dragon,flames)){
+        state.player.inv=1.6;state.hitShake=.16;sounds.splash();applyImpactDamage(true);
+        if(!state.ended)showPrompt('Dragen traff! Løp under den – bakken er trygg.',2.6,true);
+      }
+      return;
+    }
+    if(state.distance<DRAGON_START_DISTANCE||state.fireGlow>0||state.restTimer>0||state.restStop||state.restDeferred||restStopRiverClearanceActive())return;
+    state.dragonClock=Math.max(0,state.dragonClock-dt);
+    if(state.dragonClock>0||rockfallInProgress())return;
+    // Let existing rivers pass before asking the player to stay on the ground.
+    if(state.objects.some(o=>o.type==='creek'&&o.x+o.width>state.player.x-8))return;
+    state.dragon={age:0,x:W+140,breathing:false};
+    sounds.rumble();showPrompt('DRAGE! Hold deg på bakken mens den spruter ild!',3.8,true);
+  }
   function prepareRestStop(){
     if(state.restStop||state.distance<state.nextRestDistance-REST_STOP_APPROACH_DISTANCE)return;
-    if(rockfallInProgress()){state.restDeferred=true;return;}
+    if(rockfallInProgress()||dragonInProgress()){state.restDeferred=true;return;}
     const p=state.player,targetX=Math.min(W-REST_STOP_WIDTH-16,p.x+p.w+18),remainingDistance=state.restDeferred?REST_STOP_APPROACH_DISTANCE:Math.max(0,state.nextRestDistance-state.distance),stop=REST_STOPS[state.restIndex%REST_STOPS.length];
     state.restDeferred=false;
     state.restStop={...stop,x:targetX+remainingDistance*5.4,targetX,approaching:true};
@@ -339,7 +427,7 @@
   function nextRestInterval(){return state.restIndex<2?REST_STOP_INTERVAL:REST_STOP_INTERVAL+(state.restIndex-1)*1000;}
   function restScheduleAtDistance(distance){let restIndex=0,nextRestDistance=REST_STOP_INTERVAL;while(nextRestDistance<=distance){restIndex++;nextRestDistance+=restIndex<2?REST_STOP_INTERVAL:REST_STOP_INTERVAL+(restIndex-1)*1000;}return {restIndex,nextRestDistance};}
   function startRestStop(){
-    if(rockfallInProgress())return false;
+    if(rockfallInProgress()||dragonInProgress())return false;
     prepareRestStop();
     const stop=state.restStop,p=state.player;if(!stop)return false;
     stop.x=stop.targetX;stop.approaching=false;stop.leaving=false;state.restDeferred=false;state.restIndex++;state.nextRestDistance+=nextRestInterval();state.restTimer=1;state.shopOpen=false;state.shopSnapshot=null;state.smallJumpBrothPurchases=0;state.player.vy=0;state.player.y=ground-p.h;state.player.onGround=true;state.player.jumpHeld=false;state.player.jumpHold=0;state.player.airJumped=false;state.player.jumpBoost=1;
@@ -366,18 +454,18 @@
     if(state.introTimer>0){state.introTimer=Math.max(0,state.introTimer-dt);return;}
     if(state.restTimer>0){state.t+=dt;state.player.jumpHeld=false;updateUI();return;}
     state.t+=dt;state.snackBoostTimer=Math.max(0,state.snackBoostTimer-dt);state.riverSafeTimer=Math.max(0,state.riverSafeTimer-dt);state.speedBoost+=(state.speedBoostTarget-state.speedBoost)*Math.min(1,dt*SPEED_EASE);const rawSpeed=speedForLevel(state.speedBoost),rockfallActive=rockfallInProgress(),rockfallTarget=rockfallActive?Math.min(1.12,.72+Math.max(0,state.avalancheLevel-1)*.08):1;state.rockfallSpeedScale+=(rockfallTarget-state.rockfallSpeedScale)*Math.min(1,dt*1.7);state.speed=clamp(rawSpeed*state.rockfallSpeedScale,state.difficulty.startRunSpeed,state.difficulty.maxRunSpeed);const travelDt=state.fireGlow>0?0:dt;state.distance+=(state.speed/5.4)*travelDt;state.backgroundOffset+=state.speed*travelDt;
-    if(rockfallActive&&state.restStop?.approaching){state.restStop=null;state.restDeferred=true;}
+    if((rockfallActive||dragonInProgress())&&state.restStop?.approaching){state.restStop=null;state.restDeferred=true;}
     prepareRestStop();
     if(state.restStop?.approaching){state.restStop.x-=state.speed*travelDt;if(state.restStop.x<=state.restStop.targetX){state.restStop.x=state.restStop.targetX;if(startRestStop()){updateUI();return;}state.restStop=null;state.restDeferred=true;}}
     else if(state.restStop?.leaving){state.restStop.x-=state.speed*travelDt;if(state.restStop.x+REST_STOP_WIDTH<-12)state.restStop=null;}
     const p=state.player,previousBottom=p.y+p.h;if(p.jumpHeld&&p.jumpHold<.34&&p.vy<0){p.jumpHold+=dt;p.vy-=1200*(.6+state.strength*.4)*JUMP_HEIGHT_SCALE*(p.jumpBoost||1)*dt;}p.vy += 1580*JUMP_HEIGHT_SCALE*dt; p.y += p.vy * dt; if (p.y >= ground-p.h) { p.y=ground-p.h;p.vy=0;p.onGround=true;p.jumpHeld=false;p.jumpHold=0;p.airJumped=false;p.jumpBoost=1; } if (p.inv>0)p.inv-=dt;
-    if(state.fireGlow>0)state.strength=clamp(state.strength+dt*.36,0,1);state.fireGlow=Math.max(0,state.fireGlow-dt);state.sunGlow=Math.max(0,state.sunGlow-dt);state.hitShake=Math.max(0,state.hitShake-dt);state.rockHitTimer=Math.max(0,state.rockHitTimer-dt);spawnWorld(travelDt);updateEvents(travelDt);updateLightning(travelDt);
+    if(state.fireGlow>0)state.strength=clamp(state.strength+dt*.36,0,1);state.fireGlow=Math.max(0,state.fireGlow-dt);state.sunGlow=Math.max(0,state.sunGlow-dt);state.hitShake=Math.max(0,state.hitShake-dt);state.rockHitTimer=Math.max(0,state.rockHitTimer-dt);spawnWorld(travelDt);updateEvents(travelDt);if(state.ended)return;updateLightning(travelDt);
     for (let i=state.objects.length-1;i>=0;i--) { const o=state.objects[i],rolling=o.type==='boulder'&&o.isRolling,relativeSpeed=rolling?state.speed*debugSettings.relativeRollSpeed:0,objectSpeed=state.speed+relativeSpeed;o.x-=objectSpeed*travelDt;if(rolling)o.rotation-=relativeSpeed/Math.max(16,o.width*.5)*travelDt*debugSettings.rotationSpeed;
       if(o.type==='heart'){o.bob+=dt*5;if(o.collected){o.pop+=dt*3;if(o.pop>=1)state.objects.splice(i,1);continue;}const target={x:o.x,y:o.y+Math.sin(o.bob)*4,width:o.width,height:o.height};if(collide(p,target)){state.hearts++;increaseRunSpeed();o.collected=true;o.pop=0;animateHeartGain();sounds.heart();showTutorial('heart','Du fant et hjerte','Hvert hjerte øker farten ett trinn, i tillegg til å være liv og brensel til bålet. Hvert treff på en hindring senker farten ett tilsvarende trinn.');continue;}}
       if(o.type==='fish'){if(!o.triggered&&o.x>p.x+90&&o.x<p.x+300){o.triggered=true;o.leapTime=0;}if(o.triggered){o.leapTime+=dt;const progress=o.leapTime/1.35;o.leap=progress<=1?Math.sin(progress*Math.PI):0;if(progress>1.5){o.triggered=false;o.leapTime=0;}}o.currentY=ground+9-o.leap*96;const target={x:o.x-8,y:o.currentY-o.height*.5-7,width:o.width+16,height:o.height+14};if(state.doubleJumps<state.maxFishSlots&&o.leap>.12&&collide(p,target)){const slotIndex=state.doubleJumps;state.doubleJumps++;animateFishCatch(o.x+o.width*.5,o.currentY,slotIndex);state.objects.splice(i,1);sounds.heart();showTutorial('fish','Fisk gir dobbelthopp','Hver fisk fyller ett tomt fiskespor. Trykk igjen mens Teodor er i luften for å bruke ett.');continue;}}
       if(o.type==='creek'){const targetGrowth=state.rain>0?1:0,progression=1+distanceDifficulty()*.18,maxClearable=state.speed*1.1+p.w*.5;o.rainGrowth=clamp(o.rainGrowth+(targetGrowth>o.rainGrowth?dt*.42:-dt*.08),0,1);if(!o.channelWidth)o.channelWidth=Math.min(o.baseWidth*progression,maxClearable);const wanted=o.channelWidth*(1+o.rainGrowth*.8),newWidth=Math.min(wanted,maxClearable);o.x-=(newWidth-o.width)*.5;o.width=newWidth;}
       if (o.type==='creek' && !o.hit && p.x+p.w > o.x+7 && p.x < o.x+o.width-7 && p.y+p.h > ground-18 && p.inv<=0) { o.hit=true;p.inv=1.1;p.vy=0;p.y=ground-p.h;p.onGround=true;p.jumpHeld=false;p.airJumped=false;p.jumpBoost=1;addSplash(p.x+p.w*.5,ground);decreaseRunSpeed();state.strength=clamp(state.strength-.2,MIN_STRENGTH,1);if(state.boots)sounds.splash();else loseHeart();showTutorial('water','Lava svir Teodor',state.boots?'Lavastøvlene beskytter hjertene, men Teodor mister fortsatt ett fartstrinn og 20 % hoppekraft i lavaelva.':'Når Teodor blir brent av lavaen, mister han ett hjerte, ett fartstrinn og 20 % hoppekraft, men hoppekraften går aldri under minimumsnivået. Han kan hoppe videre med én gang. Askeregn gjør lavaelvene stadig bredere.'); }
-      if(o.type==='boulder'&&!o.hit){const stoneTop=ground-o.height,horizontalOverlap=p.x+p.w>o.x+3&&p.x<o.x+o.width-3,landing=horizontalOverlap&&p.vy>=0&&previousBottom<=stoneTop+7&&p.y+p.h>=stoneTop;if(landing){p.y=stoneTop-p.h;p.vy=0;p.onGround=true;p.jumpHeld=false;p.jumpHold=0;p.airJumped=false;p.jumpBoost=1;}else{const frontHitbox={x:o.x-3,y:stoneTop+o.height*.22,width:o.width*.42+6,height:o.height*.78};if(collide(p,frontHitbox)&&p.inv<=0){o.hit=true;p.inv=3;state.rockHitTimer=ROCK_HIT_DURATION;state.hitShake=.24;addRockImpact(p.x+p.w*.78,p.y+p.h*.48);sounds.rock();if(!absorbWithFirstAid()){if(state.hearts<=0){endGame();return;}decreaseRunSpeed();const heartsBeforeHit=state.hearts,lost=Math.min(state.hearts,Math.max(1,Math.ceil(state.hearts*.3)));state.hearts-=lost;animateRockHeartLoss(heartsBeforeHit,state.hearts);showTutorial('rock','Pass opp for lavaras','Et lavasteintreff tar en tredel av hjertene Teodor har akkurat da og senker farten ett trinn. Han kan fortsatt hoppe umiddelbart etter treffet.');if(state.hearts===0)endGame();}}}}
+      if(o.type==='boulder'&&!o.hit){const stoneTop=ground-o.height,horizontalOverlap=p.x+p.w>o.x+3&&p.x<o.x+o.width-3,landing=horizontalOverlap&&p.vy>=0&&previousBottom<=stoneTop+7&&p.y+p.h>=stoneTop;if(landing){p.y=stoneTop-p.h;p.vy=0;p.onGround=true;p.jumpHeld=false;p.jumpHold=0;p.airJumped=false;p.jumpBoost=1;}else{const frontHitbox={x:o.x-3,y:stoneTop+o.height*.22,width:o.width*.42+6,height:o.height*.78};if(collide(p,frontHitbox)&&p.inv<=0){o.hit=true;p.inv=3;state.rockHitTimer=ROCK_HIT_DURATION;state.hitShake=.24;addRockImpact(p.x+p.w*.78,p.y+p.h*.48);sounds.rock();if(!absorbWithFirstAid()){applyImpactDamage();if(state.ended)return;showTutorial('rock','Pass opp for lavaras','Et lavasteintreff tar en tredel av hjertene Teodor har akkurat da og senker farten ett trinn. Han kan fortsatt hoppe umiddelbart etter treffet.');}}}}
       if (o.x+o.width < -80)state.objects.splice(i,1);
     }
     for(let i=state.splashes.length-1;i>=0;i--){const splash=state.splashes[i];splash.age+=dt;for(const d of splash.drops){d.x+=d.vx*dt;d.y+=d.vy*dt;d.vy+=620*dt;}if(splash.age>.8)state.splashes.splice(i,1);}
@@ -387,25 +475,22 @@
   }
   function cloud(x,y,s) {ctx.beginPath();ctx.arc(x,y,s*.25,0,7);ctx.arc(x+s*.27,y-s*.08,s*.32,0,7);ctx.arc(x+s*.58,y,s*.25,0,7);ctx.lineTo(x+s*.78,y+s*.22);ctx.lineTo(x-s*.22,y+s*.22);ctx.fill();}
   function seeded(index, salt = 0) { const v = Math.sin((index + salt * 19.19) * 127.13) * 43758.5453; return v - Math.floor(v); }
-  function mountainBand(parallax,baseY,color,facetColor,spacing,minHeight,maxHeight,salt,snowy){const world=state.backgroundOffset*parallax,first=Math.floor(world/spacing)-3,count=Math.ceil(W/spacing)+7;for(let n=0;n<count;n++){const i=first+n,center=i*spacing-world+(seeded(i,salt)-.5)*spacing*.45,width=spacing*(.9+seeded(i,salt+1)*1.15),height=H*(minHeight+seeded(i,salt+2)*(maxHeight-minHeight)),left={x:center-width*.5,y:baseY},right={x:center+width*.5,y:baseY},peak={x:center+width*(seeded(i,salt+3)-.5)*.2,y:baseY-height};const tallVolcano=height>H*(minHeight+(maxHeight-minHeight)*.62),platY=peak.y+height*.09,platX0=peak.x-width*.055,platX1=peak.x+width*.055;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(left.x,left.y);if(tallVolcano){ctx.bezierCurveTo(left.x+width*.16,baseY-height*.16,peak.x-width*.24,platY+height*.2,platX0,platY);ctx.lineTo(platX1,platY);ctx.bezierCurveTo(platX1+width*.12,platY+height*.12,right.x-width*.13,baseY-height*.14,right.x,right.y);}else{ctx.bezierCurveTo(left.x+width*.16,baseY-height*.16,peak.x-width*.24,peak.y+height*.3,peak.x,peak.y);ctx.bezierCurveTo(peak.x+width*.2,peak.y+height*.2,right.x-width*.13,baseY-height*.14,right.x,right.y);}ctx.closePath();ctx.fill();ctx.fillStyle=facetColor;ctx.globalAlpha=.34;ctx.beginPath();if(tallVolcano){ctx.moveTo(platX1,platY);}else{ctx.moveTo(peak.x,peak.y);}ctx.lineTo(right.x,right.y);ctx.lineTo(center+width*.05,baseY);if(tallVolcano){ctx.lineTo(platX1-width*.04,platY+height*.35);}else{ctx.lineTo(peak.x-width*.04,peak.y+height*.42);}ctx.closePath();ctx.fill();ctx.globalAlpha=1;if(tallVolcano){const craterW=width*.15,backY=platY-7,frontY=platY+8,eruptionPulse=.6+.4*Math.sin(state.t*3.1+i);
-  // En enkel, høy bakkant: fjell øverst og varmt lavalys nederst.
-  const rimHalf=Math.min(craterW*.62,(platX1-platX0)*.47),backTeeth=5,backTop=[];
-  for(let g=0;g<=backTeeth;g++){backTop.push([peak.x-rimHalf+rimHalf*2*g/backTeeth,backY+(seeded(i,salt+100+g)-.5)*5]);}
-  const backGrad=ctx.createLinearGradient(0,backY-4,0,platY+5);backGrad.addColorStop(0,color);backGrad.addColorStop(1,'#c25a2a');
-  ctx.fillStyle=backGrad;ctx.beginPath();ctx.moveTo(peak.x-rimHalf,platY+4);ctx.lineTo(backTop[0][0],backTop[0][1]);for(let g=1;g<backTop.length;g++)ctx.lineTo(backTop[g][0],backTop[g][1]);ctx.lineTo(peak.x+rimHalf,platY+4);ctx.quadraticCurveTo(peak.x,platY+7,peak.x-rimHalf,platY+4);ctx.closePath();ctx.fill();
+  function mountainBand(parallax,baseY,color,facetColor,spacing,minHeight,maxHeight,salt,snowy){const world=state.backgroundOffset*parallax,first=Math.floor(world/spacing)-3,count=Math.ceil(W/spacing)+7;for(let n=0;n<count;n++){const i=first+n,center=i*spacing-world+(seeded(i,salt)-.5)*spacing*.45,width=spacing*(.9+seeded(i,salt+1)*1.15),height=H*(minHeight+seeded(i,salt+2)*(maxHeight-minHeight)),left={x:center-width*.5,y:baseY},right={x:center+width*.5,y:baseY},peak={x:center+width*(seeded(i,salt+3)-.5)*.2,y:baseY-height};const tallVolcano=height>H*(minHeight+(maxHeight-minHeight)*.62),platY=peak.y+height*.09,platX0=peak.x-width*.055,platX1=peak.x+width*.055;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(left.x,left.y);if(tallVolcano){ctx.bezierCurveTo(left.x+width*.16,baseY-height*.16,peak.x-width*.24,platY+height*.2,platX0,platY);ctx.lineTo(platX1,platY);ctx.bezierCurveTo(platX1+width*.12,platY+height*.12,right.x-width*.13,baseY-height*.14,right.x,right.y);}else{ctx.bezierCurveTo(left.x+width*.16,baseY-height*.16,peak.x-width*.24,peak.y+height*.3,peak.x,peak.y);ctx.bezierCurveTo(peak.x+width*.2,peak.y+height*.2,right.x-width*.13,baseY-height*.14,right.x,right.y);}ctx.closePath();ctx.fill();ctx.fillStyle=facetColor;ctx.globalAlpha=.34;ctx.beginPath();if(tallVolcano){ctx.moveTo(platX1,platY);}else{ctx.moveTo(peak.x,peak.y);}ctx.lineTo(right.x,right.y);ctx.lineTo(center+width*.05,baseY);if(tallVolcano){ctx.lineTo(platX1-width*.04,platY+height*.35);}else{ctx.lineTo(peak.x-width*.04,peak.y+height*.42);}ctx.closePath();ctx.fill();ctx.globalAlpha=1;if(tallVolcano){const craterW=width*.15,frontY=platY+8,eruptionPulse=.6+.4*Math.sin(state.t*3.1+i);
+  // Bakkanten buer opp fra fjellsidene uten loddrette avslutninger.
+  const rimHalf=(platX1-platX0)*.5,rimRise=6+rimHalf*(.18+seeded(i,salt+100)*.08);
+  const backGrad=ctx.createLinearGradient(0,platY-rimRise,0,frontY);backGrad.addColorStop(0,color);backGrad.addColorStop(.45,'#794535');backGrad.addColorStop(1,'#c25a2a');
+  ctx.fillStyle=backGrad;ctx.beginPath();ctx.moveTo(platX0,platY);ctx.bezierCurveTo(peak.x-rimHalf*.78,platY-rimRise*.8,peak.x-rimHalf*.4,platY-rimRise*1.05,peak.x-rimHalf*.08,platY-rimRise*.9);ctx.bezierCurveTo(peak.x+rimHalf*.3,platY-rimRise*.72,peak.x+rimHalf*.64,platY-rimRise*.95,platX1,platY);ctx.bezierCurveTo(peak.x+rimHalf*.7,frontY,peak.x-rimHalf*.7,frontY,platX0,platY);ctx.closePath();ctx.fill();
   // Én smal, organisk lavaåpning mellom kantene.
-  const lavaHalf=rimHalf*.7,lavaY=platY+2;ctx.save();ctx.shadowColor='#ff6a20';ctx.shadowBlur=18;ctx.fillStyle='#e64a1a';ctx.beginPath();ctx.moveTo(peak.x-lavaHalf,lavaY);ctx.bezierCurveTo(peak.x-lavaHalf*.55,lavaY-4,peak.x+lavaHalf*.55,lavaY-4,peak.x+lavaHalf,lavaY);ctx.bezierCurveTo(peak.x+lavaHalf*.58,lavaY+7,peak.x-lavaHalf*.58,lavaY+7,peak.x-lavaHalf,lavaY);ctx.closePath();ctx.fill();ctx.restore();
+  const lavaHalf=rimHalf*.84,lavaY=platY+1;ctx.save();ctx.shadowColor='#ff6a20';ctx.shadowBlur=18;ctx.fillStyle='#e64a1a';ctx.beginPath();ctx.moveTo(peak.x-lavaHalf,lavaY);ctx.bezierCurveTo(peak.x-lavaHalf*.55,lavaY-5,peak.x+lavaHalf*.5,lavaY-4,peak.x+lavaHalf,lavaY);ctx.bezierCurveTo(peak.x+lavaHalf*.65,frontY+2,peak.x-lavaHalf*.6,frontY+2,peak.x-lavaHalf,lavaY);ctx.closePath();ctx.fill();ctx.restore();
   // Lavaelver som et tre opp-ned fra platåets fremkant: bredt hovedløp øverst som smalner ned til foten, med to grener.
-  const lavaFlow=(pts,w0,w1,ws)=>{ctx.beginPath();pts.forEach((pt,k)=>{const f=pts.length>1?k/(pts.length-1):0,w=(w0*(1-f)+w1*f)*ws;if(k===0)ctx.moveTo(pt[0]-w,pt[1]);else ctx.lineTo(pt[0]-w,pt[1]);});for(let k=pts.length-1;k>=0;k--){const f=pts.length>1?k/(pts.length-1):0,w=(w0*(1-f)+w1*f)*ws;ctx.lineTo(pts[k][0]+w,pts[k][1]);}ctx.closePath();ctx.fill();};
-  const gapX=peak.x+(seeded(i,salt+130)-.5)*craterW*.7,trunkTopW=5.5+seeded(i,salt+131)*2,riverStartY=frontY+2,trunkPts=[[gapX,riverStartY]];
+  const lavaFlow=(pts,w0,w1,ws)=>{ctx.beginPath();pts.forEach((pt,k)=>{const f=pts.length>1?k/(pts.length-1):0,w=(pt[2]??(w0*(1-f)+w1*f))*ws;if(k===0)ctx.moveTo(pt[0]-w,pt[1]);else ctx.lineTo(pt[0]-w,pt[1]);});for(let k=pts.length-1;k>=0;k--){const f=pts.length>1?k/(pts.length-1):0,w=(pts[k][2]??(w0*(1-f)+w1*f))*ws;ctx.lineTo(pts[k][0]+w,pts[k][1]);}ctx.closePath();ctx.fill();};
+  const gapX=peak.x+(seeded(i,salt+130)-.5)*rimHalf*.36,trunkTopW=Math.min(rimHalf*.42,8+seeded(i,salt+131)*2),riverStartY=lavaY+.5,trunkPts=[[gapX,riverStartY,trunkTopW],[gapX,frontY+height*.035,trunkTopW*.7]];
   let trunkX=gapX;const trunkSegs=6;
-  for(let g=1;g<=trunkSegs;g++){const f=g/trunkSegs;trunkX+=(seeded(i,salt+140+g)-.5)*width*.05*(.3+.7*f);trunkPts.push([trunkX,riverStartY+(baseY-riverStartY)*f]);}
-  const lavaBranch=(startIdx,dir)=>{const st=trunkPts[startIdx],pts=[[st[0],st[1]]];let px=st[0],py=st[1];const blen=height*(.14+seeded(i,salt+150+startIdx)*.1);for(let g=1;g<=3;g++){px+=dir*(width*.018+seeded(i,salt+160+g+startIdx)*width*.022);py+=blen/3;pts.push([px,py]);}return pts;};
-  const branchA=lavaBranch(2,-1),branchB=lavaBranch(4,1);
+  for(let g=1;g<=trunkSegs;g++){const f=g/trunkSegs;trunkX+=(seeded(i,salt+140+g)-.5)*width*.05*(.3+.7*f);trunkPts.push([trunkX,riverStartY+(baseY-riverStartY)*f,trunkTopW*.7*(1-f)+1.5*f]);}
+  const lavaBranch=(startIdx,dir)=>{const st=trunkPts[startIdx],pts=[[st[0],st[1]]];let px=st[0],py=st[1];const blen=height*(.14+seeded(i,salt+150+startIdx-1)*.1);for(let g=1;g<=3;g++){px+=dir*(width*.018+seeded(i,salt+160+g+startIdx-1)*width*.022);py+=blen/3;pts.push([px,py]);}return pts;};
+  const branchA=lavaBranch(3,-1),branchB=lavaBranch(5,1);
   // Forkanten er lavere og fortsetter ned i fjellsiden i samme farge som fjellet.
-  const frontHalf=rimHalf*.96,frontTeeth=5,frontTop=[];
-  for(let g=0;g<=frontTeeth;g++){frontTop.push([peak.x-frontHalf+frontHalf*2*g/frontTeeth,frontY+(seeded(i,salt+190+g)-.5)*4]);}
-  const frontDepth=height*.04;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(frontTop[0][0],frontTop[0][1]);for(let g=1;g<frontTop.length;g++)ctx.lineTo(frontTop[g][0],frontTop[g][1]);ctx.lineTo(peak.x+frontHalf*.82,frontY+frontDepth);ctx.lineTo(peak.x,frontY+frontDepth*1.15);ctx.lineTo(peak.x-frontHalf*.82,frontY+frontDepth);ctx.closePath();ctx.fill();
+  const frontDepth=height*.04;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(platX0,platY);ctx.bezierCurveTo(peak.x-rimHalf*.82,frontY-1,peak.x-rimHalf*.48,frontY+1,peak.x-rimHalf*.15,frontY);ctx.bezierCurveTo(peak.x+rimHalf*.2,frontY-1,peak.x+rimHalf*.72,frontY+2,platX1,platY);ctx.bezierCurveTo(peak.x+rimHalf*.8,frontY+frontDepth,peak.x-rimHalf*.8,frontY+frontDepth,platX0,platY);ctx.closePath();ctx.fill();
   // Lavaelven tegnes sist, slik at den kommer uhindret ut foran kraterkanten.
   ctx.save();ctx.shadowColor='#ff5a1f';ctx.shadowBlur=12;ctx.fillStyle='#e64a1a';
   lavaFlow(trunkPts,trunkTopW,1.5,1);lavaFlow(branchA,2.2,.8,1);lavaFlow(branchB,2.2,.8,1);
@@ -417,10 +502,10 @@
   // Sorte røykskyer som velter opp fra krateret og driver avsted.
   for(let p=6;p>=0;p--){const puffPhase=seeded(i*7+p,salt+23),puffAge=((state.t*(.1+puffPhase*.09)+puffPhase+i*.37)%1+1)%1,puffX=peak.x+Math.sin(puffAge*5+puffPhase*9)*width*.03+puffAge*width*.075,puffY=platY-height*.05-puffAge*height*.55,puffR=9+puffAge*36+puffPhase*10;ctx.fillStyle=`rgba(30,24,28,${(1-puffAge)*.6})`;ctx.beginPath();ctx.arc(puffX,puffY,puffR,0,7);ctx.fill();ctx.fillStyle=`rgba(58,46,50,${(1-puffAge)*.35})`;ctx.beginPath();ctx.arc(puffX-puffR*.25,puffY-puffR*.2,puffR*.6,0,7);ctx.fill();}
   // Varm glød som farger den nederste røyken nedenfra.
-  ctx.fillStyle=`rgba(255,122,42,${.22*eruptionPulse})`;ctx.beginPath();ctx.ellipse(peak.x,platY-8,craterW*.5,height*.028,0,0,7);ctx.fill();}}}
+  const glowRadius=craterW*.65,craterGlow=ctx.createRadialGradient(peak.x,platY-2,1,peak.x,platY-2,glowRadius);craterGlow.addColorStop(0,`rgba(255,122,42,${.2*eruptionPulse})`);craterGlow.addColorStop(.45,`rgba(255,122,42,${.08*eruptionPulse})`);craterGlow.addColorStop(1,'rgba(255,122,42,0)');ctx.fillStyle=craterGlow;ctx.fillRect(peak.x-glowRadius,platY-2-glowRadius,glowRadius*2,glowRadius*2);}}}
   function mountains(){mountainBand(.03,ground+5,'#5a3a3c','#2b1a1e',330,.28,.58,2,true);mountainBand(.065,ground+12,'#4a2b26','#1f1214',300,.18,.4,9,false);}
   function deciduousTree(x, base, s, alpha, shapeSeed=0) { const variation=salt=>{const value=Math.sin((shapeSeed*.073+s*1.91+salt*17.7)*91.73)*43758.5453;return value-Math.floor(value);};ctx.save();ctx.globalAlpha=alpha;ctx.translate(x,base);ctx.strokeStyle='#2b1a14';ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=Math.max(2,s*.09);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo((variation(1)-.5)*s*.05,-s*.78);ctx.stroke();for(let branch=0;branch<7;branch++){const direction=branch%2===0?-1:1,startY=-s*(.24+branch*.075),length=s*(.18+variation(branch+2)*.16),rise=s*(.1+variation(branch+11)*.12);let px=(variation(branch+21)-.5)*s*.035,py=startY;ctx.lineWidth=Math.max(1.4,s*(.052-branch*.003));ctx.beginPath();ctx.moveTo(px,py);for(let segment=1;segment<=2;segment++){px+=direction*length*.5+(variation(branch*3+segment+31)-.5)*s*.08;py-=rise*.5+(variation(branch*5+segment+41)-.5)*s*.055;ctx.lineTo(px,py);}ctx.stroke();}ctx.restore(); }
-  function pineTree(x, base, s, alpha) { ctx.save();ctx.globalAlpha=alpha;ctx.translate(x,base);ctx.fillStyle='#2b1a14';ctx.fillRect(-s*.035,-s*.72,s*.07,s*.72);ctx.fillStyle='#3a2320';for(let i=0;i<4;i++){const y=-s*(.96-i*.19),half=s*(.19+i*.055);ctx.beginPath();ctx.moveTo(0,y-s*.25);ctx.lineTo(-half,y+s*.18);ctx.lineTo(half,y+s*.18);ctx.closePath();ctx.fill()}ctx.fillStyle='#6a3a26';ctx.beginPath();ctx.moveTo(-s*.03,-s*1.18);ctx.lineTo(-s*.2,-s*.76);ctx.lineTo(0,-s*.83);ctx.closePath();ctx.fill();ctx.restore(); }
+  function pineTree(x, base, s, alpha) { ctx.save();ctx.globalAlpha=alpha;ctx.translate(x,base);ctx.fillStyle='#2b1a14';ctx.fillRect(-s*.035,-s*.72,s*.07,s*.72);ctx.fillStyle='#183b2c';for(let i=0;i<4;i++){const y=-s*(.96-i*.19),half=s*(.19+i*.055);ctx.beginPath();ctx.moveTo(0,y-s*.25);ctx.lineTo(-half,y+s*.18);ctx.lineTo(half,y+s*.18);ctx.closePath();ctx.fill()}ctx.fillStyle='#315440';ctx.beginPath();ctx.moveTo(-s*.03,-s*1.18);ctx.lineTo(-s*.2,-s*.76);ctx.lineTo(0,-s*.83);ctx.closePath();ctx.fill();ctx.restore(); }
   function treeLayer(parallax, spacing, base, minSize, maxSize, alpha, salt) { const world=state.backgroundOffset*parallax, first=Math.floor(world/spacing)-2, count=Math.ceil(W/spacing)+5; for(let n=0;n<count;n++){const i=first+n,x=i*spacing-world+(seeded(i,salt)-.5)*spacing*.38,s=minSize+seeded(i,salt+1)*(maxSize-minSize); if(seeded(i,salt+2)>.46)pineTree(x,base,s,alpha);else deciduousTree(x,base,s,alpha,i+salt*1000);} }
   function drawGroundDetails(){const spacing=216,world=state.backgroundOffset,first=Math.floor(world/spacing)-2,count=Math.ceil(W/spacing)+5;for(let n=0;n<count;n++){const i=first+n,x=i*spacing-world+(seeded(i,22)-.5)*spacing*.5,y=ground+27+seeded(i,24)*Math.max(12,H-ground-52),depth=clamp((y-ground)/Math.max(1,H-ground),0,1),baseSize=7+seeded(i,23)*11,size=baseSize*(1+depth*2),blocked=state.objects.some(o=>o.type==='creek'&&x+size>o.x-6&&x-size<o.x+o.width+6);if(blocked)continue;const type=Math.floor(seeded(i,25)*3);ctx.save();ctx.translate(x,y);if(type===0){const blades=[[-.27,-.9,-.72],[-.18,-.68,-1.05],[-.08,-.3,-1.28],[.03,.08,-1.38],[.13,.43,-1.22],[.22,.74,-.98],[.28,.98,-.68]];ctx.fillStyle='#3a2420';for(const [baseX,tipX,tipY] of blades){const bx=baseX*size,tx=tipX*size,ty=tipY*size;ctx.beginPath();ctx.moveTo(bx-size*.095,0);ctx.quadraticCurveTo(tx-size*.1,ty*.42,tx,ty);ctx.quadraticCurveTo(tx+size*.11,ty*.46,bx+size*.1,0);ctx.closePath();ctx.fill();}ctx.strokeStyle='#c25a2a';ctx.lineWidth=Math.max(1,size*.035);ctx.lineCap='round';for(const [baseX,tipX,tipY] of blades.slice(1,6)){ctx.beginPath();ctx.moveTo(baseX*size,0);ctx.lineTo(tipX*size*.86,tipY*size*.82);ctx.stroke();}}else if(type===1){ctx.fillStyle='#4a2e26';ctx.beginPath();ctx.ellipse(-size*.35,0,size*.58,size*.42,-.25,0,7);ctx.ellipse(size*.3,-size*.15,size*.65,size*.5,.2,0,7);ctx.fill();ctx.fillStyle='#7a4a32';ctx.beginPath();ctx.ellipse(0,-size*.38,size*.38,size*.25,0,0,7);ctx.fill();}else{ctx.fillStyle='#745d43';ctx.beginPath();ctx.roundRect(-size*.4,-size*.7,size*.8,size*.85,Math.max(2,size*.08));ctx.fill();ctx.fillStyle='#a58a62';ctx.beginPath();ctx.ellipse(0,-size*.7,size*.4,size*.16,0,0,7);ctx.fill();ctx.strokeStyle='#6d583f';ctx.lineWidth=Math.max(1,size*.05);ctx.beginPath();ctx.arc(0,-size*.7,size*.2,0,7);ctx.stroke();}ctx.restore();}}
   function foregroundBush(o){ctx.save();ctx.translate(o.x,ground);ctx.fillStyle='#3a2220';ctx.beginPath();ctx.ellipse(o.width*.25,-o.height*.22,o.width*.31,o.height*.55,0,0,7);ctx.ellipse(o.width*.6,-o.height*.27,o.width*.37,o.height*.63,0,0,7);ctx.fill();ctx.fillStyle='#7a3a22';ctx.beginPath();ctx.ellipse(o.width*.38,-o.height*.52,o.width*.16,o.height*.25,0,0,7);ctx.fill();ctx.restore();}
@@ -506,10 +591,13 @@
   function strikeLightning(){const x0=W*(.08+Math.random()*.84),pts=[[x0,-12]];let bx=x0;const segs=9;for(let g=1;g<=segs;g++){bx+=(Math.random()-.5)*56;pts.push([bx,-12+(ground+24)*g/segs]);}const branches=[],nBr=2+Math.floor(Math.random()*3);for(let b=0;b<nBr;b++){const si=2+Math.floor(Math.random()*(segs-3)),st=pts[si],dir=Math.random()<.5?-1:1,bpts=[[st[0],st[1]]];let px=st[0],py=st[1];const bl=3+Math.floor(Math.random()*3);for(let g=1;g<=bl;g++){px+=dir*(10+Math.random()*22);py+=26+Math.random()*30;bpts.push([px,py]);}branches.push(bpts);}state.bolt={pts,branches,age:0};state.flash=1;state.thunderClock=rand(.4,1.4);}
   function drawLightning(){const bolt=state.bolt;if(!bolt)return;const alpha=clamp(1-bolt.age/.45,0,1);if(alpha<=0)return;ctx.save();ctx.lineJoin='round';ctx.lineCap='round';ctx.shadowColor='#bfe0ff';ctx.shadowBlur=18;const stroke=(pts,w)=>{ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let k=1;k<pts.length;k++)ctx.lineTo(pts[k][0],pts[k][1]);ctx.stroke();};ctx.strokeStyle=`rgba(159,208,255,${alpha})`;stroke(bolt.pts,3.5);for(const b of bolt.branches)stroke(b,1.6);ctx.shadowBlur=0;ctx.strokeStyle=`rgba(255,255,255,${alpha})`;stroke(bolt.pts,1.4);for(const b of bolt.branches)stroke(b,.8);ctx.restore();}
   function rain(){const intensity=state.rain;if(intensity<=0)return;ctx.save();ctx.lineCap='round';rainLayer(Math.floor(48*intensity),330,11,1,.34,51);rainLayer(Math.floor(72*intensity),510,19,1.35,.5,61);rainLayer(Math.floor(48*intensity),760,29,2,.72,71);const mist=ctx.createLinearGradient(0,ground-55,0,ground+65);mist.addColorStop(0,'rgba(205,235,232,0)');mist.addColorStop(1,`rgba(190,224,220,${.16*intensity})`);ctx.fillStyle=mist;ctx.fillRect(0,ground-55,W,120);ctx.strokeStyle=`rgba(223,249,244,${.42*intensity})`;ctx.fillStyle=`rgba(255,214,120,${.48*intensity})`;ctx.lineWidth=1.2;const impacts=Math.floor(25*intensity);for(let i=0;i<impacts;i++){const cycle=(state.t*(1.5+seeded(i,82)*1.8)+seeded(i,83))%1;if(cycle<.72)continue;const x=(seeded(i,84)*W+state.t*(34+seeded(i,85)*20))%W,y=ground+2,r=(cycle-.72)/.28*(5+seeded(i,86)*6);ctx.beginPath();ctx.arc(x,y,r,Math.PI*1.08,Math.PI*1.92);ctx.stroke();ctx.beginPath();ctx.arc(x-r*.25,y-r*.5,1.2,0,7);ctx.fill();ctx.beginPath();ctx.arc(x+r*.3,y-r*.72,1,0,7);ctx.fill();}ctx.restore();}
-  function draw(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#402732';ctx.fillRect(0,0,W,H);const avalancheShake=state.avalancheLeadIn>0?Math.min(7,3.2+state.avalancheLevel*.4+distanceDifficulty()*.2):0,hitForce=clamp(state.hitShake/.24,0,1),shake=avalancheShake+hitForce*9;ctx.save();if(shake>0)ctx.translate(Math.sin(state.t*51)*shake,Math.sin(state.t*37+1.4)*shake*.55);const sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#2e1a26');sky.addColorStop(.55,'#7a3a2e');sky.addColorStop(1,'#e08a5a');ctx.fillStyle=sky;ctx.fillRect(-10,-10,W+20,H+20);if(state.skyDarkness>0){ctx.fillStyle=`rgba(30,50,60,${state.skyDarkness*.5})`;ctx.fillRect(-10,-10,W+20,H+20)}if(state.flash>0){ctx.fillStyle=`rgba(255,246,214,${state.flash*.5})`;ctx.fillRect(-10,-10,W+20,H+20)}drawSun();ctx.save();ctx.globalAlpha=1-state.skyDarkness*.72;ctx.fillStyle='#5a3a3599';cloud(W*.2-state.backgroundOffset*.025,H*.13,95);cloud(W*.7-state.backgroundOffset*.018,H*.2,125);ctx.restore();mountains();
+  function draw(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#402732';ctx.fillRect(0,0,W,H);const avalancheShake=state.avalancheLeadIn>0?Math.min(7,3.2+state.avalancheLevel*.4+distanceDifficulty()*.2):0,hitForce=clamp(state.hitShake/.24,0,1),shake=avalancheShake+hitForce*9;ctx.save();if(shake>0)ctx.translate(Math.sin(state.t*51)*shake,Math.sin(state.t*37+1.4)*shake*.55);const sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#2e1a26');sky.addColorStop(.55,'#7a3a2e');sky.addColorStop(1,'#e08a5a');ctx.fillStyle=sky;ctx.fillRect(-10,-10,W+20,H+20);
+    // Godværshimmelen tones bort når uværet kommer, og frem igjen når det klarner.
+    if(state.skyDarkness<1){const clearSky=ctx.createLinearGradient(0,0,0,H);clearSky.addColorStop(0,'#397eae');clearSky.addColorStop(.55,'#a67b70');clearSky.addColorStop(1,'#e08a5a');ctx.save();ctx.globalAlpha=1-state.skyDarkness;ctx.fillStyle=clearSky;ctx.fillRect(-10,-10,W+20,H+20);ctx.restore();}
+    if(state.skyDarkness>0){ctx.fillStyle=`rgba(30,50,60,${state.skyDarkness*.5})`;ctx.fillRect(-10,-10,W+20,H+20)}if(state.flash>0){ctx.fillStyle=`rgba(255,246,214,${state.flash*.5})`;ctx.fillRect(-10,-10,W+20,H+20)}drawSun();ctx.save();ctx.globalAlpha=1-state.skyDarkness*.72;ctx.fillStyle='#5a3a3599';cloud(W*.2-state.backgroundOffset*.025,H*.13,95);cloud(W*.7-state.backgroundOffset*.018,H*.2,125);ctx.restore();mountains();
     treeLayer(.12,118,ground+8,80,115,.58,4);treeLayer(.23,155,ground+10,108,158,.95,11);ctx.fillStyle='#4a2e28';ctx.fillRect(0,ground,W,H-ground);drawGroundDetails(); // Detaljer under stien hoppes over der lavaelvene ligger.
     for(const o of state.objects)if(o.type==='bush')foregroundBush(o);for(const o of state.objects)if(o.type==='creek')drawCreek(o);for(const o of state.objects){if(o.type==='heart')drawHeart(o);else if(o.type==='boulder')drawBoulder(o);else if(o.type==='fish')drawFish(o)}
-    drawRondaneSign();drawRestStop();drawMarit();drawRockImpacts();drawBonfire();drawSplashes();stormClouds();rain();drawLightning();ctx.restore();
+    drawRondaneSign();drawRestStop();drawMarit();drawRockImpacts();drawBonfire();drawSplashes();stormClouds();drawDragon();rain();drawLightning();ctx.restore();
   }
   function loop(now){if(!state?.running)return;const dt=Math.min(.033,(now-last)/1000);last=now;const heartAnimationChanged=updateHeartLossAnimation(dt),gameplayActive=!state.paused&&!state.tutorialPaused&&!state.shopOpen&&!state.quitConfirmOpen&&!orientationBlocked;if(gameplayActive)update(dt);else if(heartAnimationChanged)updateUI();draw();if(state.running)raf=requestAnimationFrame(loop);}
   canvas.addEventListener('pointerdown',e=>{e.preventDefault();const rect=canvas.getBoundingClientRect(),x=(e.clientX-rect.left)*W/rect.width,y=(e.clientY-rect.top)*H/rect.height,bounds=state?.restTimer>0?restShopBounds():null;if(bounds&&x>=bounds.x&&x<=bounds.x+bounds.width&&y>=bounds.y&&y<=bounds.y+bounds.height){openShop();return;}canvas.setPointerCapture?.(e.pointerId);startJump();});canvas.addEventListener('pointerup',e=>{e.preventDefault();endJump();});canvas.addEventListener('pointercancel',endJump);

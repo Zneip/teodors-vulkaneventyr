@@ -85,6 +85,12 @@ function pathXSpan({ path }) {
   return Math.max(...xs) - Math.min(...xs);
 }
 
+function firstCrater(fills) {
+  const openingIndex = fills.findIndex(({ color, path }) => color === '#e64a1a' && path.some(([name]) => name === 'bezierCurveTo'));
+  assert.ok(openingIndex > 0, 'a crater needs a lava opening and a back rim');
+  return { backRim: fills[openingIndex - 1], opening: fills[openingIndex], foreground: fills[openingIndex + 1], river: fills[openingIndex + 2] };
+}
+
 test('jumping river fish is rendered only as white skeletal bones', () => {
   const recording = recordingContext();
   const drawFish = loadDrawFish(recording.ctx);
@@ -167,14 +173,15 @@ test('a deciduous tree keeps the same branch geometry while its screen position 
   assert.deepEqual(secondFrame.strokes, firstFrame.strokes, 'scrolling a tree across the screen must not change its branch shape');
 });
 
-test('tall volcano has a mountain-coloured jagged crater foreground', () => {
+test('tall volcano has a mountain-coloured curved crater foreground', () => {
   const recording = recordingContext();
   const state = { backgroundOffset: 0, t: 0 };
 
   loadMountainBand(recording.ctx, state, 100, 600)(.03, 455, '#5a3a3c', '#2b1a1e', 330, .28, .58, 2, true);
 
-  const craterForegrounds = recording.fills.filter(({ color, path }) => color === '#5a3a3c' && path.filter(([name]) => name === 'lineTo').length >= 8);
-  assert.ok(craterForegrounds.length > 0, 'a filled mountain-coloured foreground should frame the lava opening');
+  const { foreground } = firstCrater(recording.fills);
+  assert.equal(foreground.color, '#5a3a3c');
+  assert.ok(foreground.path.some(([name]) => name === 'bezierCurveTo'), 'the front rim should blend into the mountain with curves');
 });
 
 test('crater opening is not rendered as a pair of lava ellipses', () => {
@@ -193,8 +200,7 @@ test('lava opening stays inside the mountain-coloured crater rim', () => {
 
   loadMountainBand(recording.ctx, state, 100, 600)(.03, 455, '#5a3a3c', '#2b1a1e', 330, .28, .58, 2, true);
 
-  const opening = recording.fills.find(({ color }) => color === '#e64a1a');
-  const foreground = recording.fills.find(({ color, path }) => color === '#5a3a3c' && path.filter(([name]) => name === 'lineTo').length >= 8);
+  const { opening, foreground } = firstCrater(recording.fills);
   assert.ok(pathXSpan(opening) < pathXSpan(foreground), 'lava must not protrude past the front crater rim');
 });
 
@@ -204,7 +210,8 @@ test('lava river is drawn in front of the crater foreground', () => {
 
   loadMountainBand(recording.ctx, state, 100, 600)(.03, 455, '#5a3a3c', '#2b1a1e', 330, .28, .58, 2, true);
 
-  const foregroundIndex = recording.fills.findIndex(({ color, path }) => color === '#5a3a3c' && path.filter(([name]) => name === 'lineTo').length >= 8);
+  const { foreground } = firstCrater(recording.fills);
+  const foregroundIndex = recording.fills.indexOf(foreground);
   const riverIndex = recording.fills.findIndex(({ color, path }) => color === '#e64a1a' && path.filter(([name]) => name === 'lineTo').length >= 10);
   assert.ok(riverIndex > foregroundIndex, 'the crater foreground must not cover the descending lava river');
 });
@@ -215,9 +222,10 @@ test('crater foreground does not protrude beyond the back rim', () => {
 
   loadMountainBand(recording.ctx, state, 100, 600)(.03, 455, '#5a3a3c', '#2b1a1e', 330, .28, .58, 2, true);
 
-  const foreground = recording.fills.find(({ color, path }) => color === '#5a3a3c' && path.filter(([name]) => name === 'lineTo').length >= 8);
-  const backRim = recording.fills.find(({ color, path }) => typeof color === 'object' && path.filter(([name]) => name === 'lineTo').length >= 5);
+  const { foreground, backRim } = firstCrater(recording.fills);
   assert.ok(pathXSpan(foreground) <= pathXSpan(backRim) * 1.1, 'the front rim should stay within the crater width');
+  assert.deepEqual(foreground.path[0], backRim.path[0], 'the front and back rims must meet at the mountainside');
+  assert.ok(!backRim.path.some(([name]) => name === 'lineTo'), 'the back rim should have no sharp vertical side walls');
 });
 
 test('crater does not render an orange zigzag outline above the back rim', () => {
@@ -229,15 +237,21 @@ test('crater does not render an orange zigzag outline above the back rim', () =>
   assert.ok(!recording.strokes.some(({ color }) => color === 'rgba(255,175,85,.9)'), 'the separate orange zigzag line should be removed');
 });
 
-test('descending lava river starts at the front crater edge', () => {
+test('descending lava river overlaps the crater lava and has a wider mouth', () => {
   const recording = recordingContext();
   const state = { backgroundOffset: 0, t: 0 };
 
   loadMountainBand(recording.ctx, state, 100, 600)(.03, 455, '#5a3a3c', '#2b1a1e', 330, .28, .58, 2, true);
 
-  const foreground = recording.fills.find(({ color, path }) => color === '#5a3a3c' && path.filter(([name]) => name === 'lineTo').length >= 8);
-  const river = recording.fills.find(({ color, path }) => color === '#e64a1a' && path.filter(([name]) => name === 'lineTo').length >= 10);
-  const frontEdgeY = Math.min(...foreground.path.slice(0, 6).map((operation) => operation[2]));
-  const riverStartY = river.path[0][2];
-  assert.ok(riverStartY >= frontEdgeY, 'the visible river should begin at the lower crater edge');
+  const { opening, river } = firstCrater(recording.fills);
+  const riverPoints = river.path.filter(([name]) => name === 'moveTo' || name === 'lineTo');
+  const mouthLeft = riverPoints[0], mouthRight = riverPoints.at(-1);
+  const lowerCurve = opening.path.findLast(([name]) => name === 'bezierCurveTo');
+  const t = .5, centerBottom = (1-t)**3 * opening.path[0][2] + 3*(1-t)**2*t*lowerCurve[2] + 3*(1-t)*t*t*lowerCurve[4] + t**3*lowerCurve[6];
+  assert.ok(mouthLeft[2] > opening.path[0][2] && mouthLeft[2] < centerBottom, 'the mouth must begin inside the lava opening, without a vertical gap');
+  const openingLeft = opening.path[0][1], openingRight = opening.path[1].at(-2);
+  assert.ok(mouthLeft[1] > openingLeft && mouthRight[1] < openingRight, 'the river mouth must stay inside the lava opening');
+  const mouthWidth = mouthRight[1] - mouthLeft[1];
+  const downstreamWidth = riverPoints.at(-2)[1] - riverPoints[1][1];
+  assert.ok(mouthWidth > downstreamWidth, 'the wider river mouth should taper as lava descends');
 });
