@@ -75,6 +75,43 @@
     }
   };
 
+  // Ekte lydeffekter (CC0, se sfx/CREDITS.md) lastes som WebAudio-buffers;
+  // mangler en fil, faller spilleren tilbake til syntetiske toner.
+  const SfxStore = {
+    files: {
+      rain: 'sfx/rain-loop.mp3',
+      thunder: 'sfx/thunder.mp3',
+      dragonFlame: 'sfx/dragon-flame.wav',
+      fireball: 'sfx/fireball.wav',
+      lightning: 'sfx/Lightning.mp3',
+      bonfire: 'sfx/bonfire.wav',
+      splash: 'sfx/lava-splash.mp3',
+      rockfall: 'sfx/rockfall-pebbles.mp3'
+    },
+    buffers: {}, loops: {},
+    async load(){
+      if(!audio)return;
+      for(const [key,url] of Object.entries(this.files)){
+        if(this.buffers[key])continue;
+        try{const response=await fetch(url);if(!response.ok)continue;const data=await response.arrayBuffer();this.buffers[key]=await audio.decodeAudioData(data);}catch{}
+      }
+    },
+    ready(name){if(muted||!audio||audio.state!=='running')return false;if(this.buffers[name])return true;this.load();return false;},
+    play(name,volume=.85){
+      if(!this.ready(name))return false;
+      try{const source=audio.createBufferSource(),gain=audio.createGain();source.buffer=this.buffers[name];gain.gain.value=volume;source.connect(gain).connect(audio.destination);source.start();return true;}catch{return false;}
+    },
+    startLoop(name,volume=.5,fade=.7){
+      if(!this.ready(name)||this.loops[name])return false;
+      try{const source=audio.createBufferSource(),gain=audio.createGain();source.buffer=this.buffers[name];source.loop=true;gain.gain.value=0;source.connect(gain).connect(audio.destination);source.start();gain.gain.linearRampToValueAtTime(volume,audio.currentTime+fade);this.loops[name]={source,gain};return true;}catch{return false;}
+    },
+    stopLoop(name,fade=.8){
+      const entry=this.loops[name];if(!entry)return;delete this.loops[name];
+      try{entry.gain.gain.cancelScheduledValues(audio.currentTime);entry.gain.gain.setValueAtTime(Math.max(.0001,entry.gain.gain.value),audio.currentTime);entry.gain.gain.linearRampToValueAtTime(.0001,audio.currentTime+fade);entry.source.stop(audio.currentTime+fade+.05);}catch{}
+    },
+    stopAllLoops(){for(const name of Object.keys(this.loops))this.stopLoop(name);}
+  };
+
   let W = 0, H = 0, ground = 0, last = 0, raf = 0, audio, audioRecoveryNeeded = false, muted = false, pseudoFullscreen = false, orientationBlocked = false, resizeTimer = 0, orientationReleaseTimer = 0, pendingScore = 0, leaderboardLoading = false, scoreSubmitting = false, priceEditorPin = '';
   const debugSettings={rotationSpeed:.45,relativeRollSpeed:.2,rollingShare:70};
   let state;
@@ -98,7 +135,10 @@
   const SPEED_EASE = 2.2;
   const ROCK_HIT_DURATION = .72;
   const DRAGON_START_DISTANCE = 40000;
-  const DRAGON_FLIGHT_DURATION = 8.8;
+  const DRAGON_FLIGHT_DURATION = 14.6;
+  const DRAGON_ATTACK_WINDOW = 1.35;
+  const DRAGON_FIRST_ATTACK_AGE = 2;
+  const DRAGON_LAVA_CLEARANCE = 360;
   const MAX_SMALL_JUMP_BROTHS_PER_REST = 2;
   const SHOP_CATALOG = Object.freeze({
     'fish-slot':{price:10},
@@ -169,13 +209,14 @@
     }
     if(audio.state!=='running'){
       const current=audio;
-      try{const resuming=current.resume?.();resuming?.then?.(()=>{if(audio===current)audioRecoveryNeeded=current.state!=='running';}).catch?.(()=>{if(audio===current)audioRecoveryNeeded=true;});}catch{audioRecoveryNeeded=true;}
+      try{const resuming=current.resume?.();resuming?.then?.(()=>{if(audio===current){audioRecoveryNeeded=current.state!=='running';SfxStore.load();}}).catch?.(()=>{if(audio===current)audioRecoveryNeeded=true;});}catch{audioRecoveryNeeded=true;}
     }
+    if(audio.state==='running')SfxStore.load();
   }
   function recoverAudioFromGesture(){if(!muted)initAudio(audioRecoveryNeeded);}
   function tone(freq, duration, type = 'sine', gain = .07, rise = .01) { if (muted) return; if(!audio||audio.state!=='running')initAudio();if(!audio)return; const o = audio.createOscillator(), g = audio.createGain(); o.type = type; o.frequency.setValueAtTime(freq, audio.currentTime); g.gain.setValueAtTime(.0001, audio.currentTime); g.gain.exponentialRampToValueAtTime(gain, audio.currentTime + rise); g.gain.exponentialRampToValueAtTime(.0001, audio.currentTime + duration); o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + duration + .03); }
   function rumbleSound(){if(muted)return;if(!audio||audio.state!=='running')initAudio();if(!audio)return;const duration=1.25,length=Math.floor(audio.sampleRate*duration),buffer=audio.createBuffer(1,length,audio.sampleRate),data=buffer.getChannelData(0);for(let i=0;i<length;i++)data[i]=(Math.random()*2-1)*(1-i/length);const source=audio.createBufferSource(),filter=audio.createBiquadFilter(),gain=audio.createGain();filter.type='lowpass';filter.frequency.value=145;gain.gain.setValueAtTime(.0001,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.12,audio.currentTime+.08);gain.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+duration);source.buffer=buffer;source.connect(filter).connect(gain).connect(audio.destination);source.start();tone(62,duration,'sawtooth',.055,.08);}
-  const sounds = { jump(){tone(360,.12,'triangle',.09);setTimeout(()=>tone(580,.1,'triangle',.05),65)}, heart(){tone(650,.07,'sine',.06);setTimeout(()=>tone(920,.16,'sine',.06),70)}, buy(){tone(494,.08,'triangle',.055);setTimeout(()=>tone(659,.1,'triangle',.05),70);setTimeout(()=>tone(880,.14,'sine',.045),145)}, fire(){tone(150,.35,'sawtooth',.08);setTimeout(()=>tone(250,.25,'triangle',.07),70)}, rest(){tone(523,.14,'triangle',.065);setTimeout(()=>tone(659,.18,'triangle',.06),100);setTimeout(()=>tone(784,.22,'triangle',.05),210)}, splash(){tone(85,.3,'sine',.1)}, rock(){tone(68,.28,'square',.105,.006);tone(165,.12,'sawtooth',.075,.004);setTimeout(()=>tone(430,.08,'square',.045,.003),24)}, rain(){tone(240,.09,'sine',.025)}, rumble:rumbleSound };
+  const sounds = { jump(){tone(360,.12,'triangle',.09);setTimeout(()=>tone(580,.1,'triangle',.05),65)}, heart(){tone(650,.07,'sine',.06);setTimeout(()=>tone(920,.16,'sine',.06),70)}, buy(){tone(494,.08,'triangle',.055);setTimeout(()=>tone(659,.1,'triangle',.05),70);setTimeout(()=>tone(880,.14,'sine',.045),145)}, fire(){if(!SfxStore.play('dragonFlame',.8)){tone(150,.35,'sawtooth',.08);setTimeout(()=>tone(250,.25,'triangle',.07),70);}}, bonfire(){if(!SfxStore.play('bonfire',.7)){tone(150,.35,'sawtooth',.08);setTimeout(()=>tone(250,.25,'triangle',.07),70);}}, rest(){tone(523,.14,'triangle',.065);setTimeout(()=>tone(659,.18,'triangle',.06),100);setTimeout(()=>tone(784,.22,'triangle',.05),210)}, splash(){if(!SfxStore.play('splash',.85))tone(85,.3,'sine',.1)}, rock(){tone(68,.28,'square',.105,.006);tone(165,.12,'sawtooth',.075,.004);setTimeout(()=>tone(430,.08,'square',.045,.003),24)}, rain(){if(!SfxStore.startLoop('rain',.42))tone(240,.09,'sine',.025)}, rainStop(){SfxStore.stopLoop('rain')}, thunder(){if(!SfxStore.play('thunder',.55))rumbleSound()}, lightning(){if(!SfxStore.play('lightning',.9))sounds.thunder()}, fireball(){if(!SfxStore.play('fireball',.9))sounds.rumble()}, rumble:rumbleSound };
 
   let selectedDifficulty='normal';
   function difficultyFor(key){return DIFFICULTIES[key]||DIFFICULTIES.normal;}
@@ -269,7 +310,7 @@
   function absorbWithFirstAid(){if(state.firstAid<=0)return false;animateConsumable(ui.firstAidBadge,'first-aid');state.firstAid--;sounds.buy();showPrompt(`Førstehjelpspakken tok av for lavasteintreffet! ${state.firstAid?`${state.firstAid} igjen.`:'Ingen igjen.'}`,2.5);updateUI();return true;}
   function startJump() { if (!state?.running || state.introTimer>0 || state.restTimer>0 || state.shopOpen || state.quitConfirmOpen || state.paused || state.tutorialPaused || orientationBlocked || state.fireGlow > 0) return; initAudio(); const p=state.player,isAirJump=!p.onGround,freeDoubleJump=state.snackBoostTimer>0;if(isAirJump&&(p.airJumped||p.jumpHeld||(!freeDoubleJump&&state.doubleJumps<=0)))return;if(isAirJump){if(!freeDoubleJump){animateFishUse(state.doubleJumps-1);state.doubleJumps--;}p.airJumped=true;}p.jumpBoost=1;const power=(.65+state.strength*.35)*JUMP_VELOCITY_SCALE;p.vy=-500*power;p.onGround=false;p.jumpHeld=true;p.jumpHold=0;sounds.jump(); }
   function endJump() { if (!state?.player?.jumpHeld) return; const p=state.player,power=(.65+state.strength*.35)*JUMP_VELOCITY_SCALE*(p.jumpBoost||1);p.jumpHeld=false;if(p.vy<-290*power)p.vy=-290*power; }
-  function bonfire() { if (!state?.running || state.restTimer>0 || state.paused || state.tutorialPaused || state.hearts < 10 || state.fireGlow > 0 || state.strength >= .995) return; initAudio(); state.hearts-=10;state.fireGlow=3.4;animateHeartLoss();sounds.fire();updateUI();showTutorial('bonfire','Et varmt hvilested','Et bål koster 10 hjerter, men fyller hoppekraften gradvis opp. Teodor stopper trygt mens bålet brenner.'); }
+  function bonfire() { if (!state?.running || state.restTimer>0 || state.paused || state.tutorialPaused || state.hearts < 10 || state.fireGlow > 0 || state.strength >= .995) return; initAudio(); state.hearts-=10;state.fireGlow=3.4;animateHeartLoss();sounds.bonfire();updateUI();showTutorial('bonfire','Et varmt hvilested','Et bål koster 10 hjerter, men fyller hoppekraften gradvis opp. Teodor stopper trygt mens bålet brenner.'); }
   function togglePause() { if (!state?.running || state.ended || state.restTimer>0 || state.shopOpen || state.quitConfirmOpen || state.tutorialPaused) return; state.paused=!state.paused;ui.frame.classList.toggle('paused',state.paused);if(!state.paused)recoverAudioFromGesture();state.player.jumpHeld=false;ui.pauseLabel.textContent=state.paused?'FORTSETT':'PAUSE';ui.pause.setAttribute('aria-label',state.paused?'Fortsett spillet':'Sett spillet på pause');ui.pauseOverlay.classList.toggle('hidden',!state.paused);last=performance.now(); }
   function returnToStart(){cancelAnimationFrame(raf);clearPrompt();state=freshState();ui.frame.classList.remove('playing','at-rest','paused');ui.gameActions.classList.add('hidden-controls');ui.debugPanel.classList.add('hidden-controls');ui.statusDock.classList.add('hidden-controls');ui.bonfire.classList.add('hidden-controls');ui.shopInventory.classList.add('hidden-controls');ui.pauseOverlay.classList.add('hidden');ui.restCountdown.classList.add('hidden');ui.restActions.classList.add('hidden');ui.shopOverlay.classList.add('hidden');ui.quitConfirmOverlay.classList.add('hidden');ui.tutorial.classList.add('hidden');ui.howToPlay.classList.add('hidden');ui.priceEditorOverlay.classList.add('hidden');ui.gameOver.classList.add('hidden');ui.scoreForm.hidden=true;ui.start.classList.remove('hidden');ui.pauseLabel.textContent='PAUSE';ui.high.textContent=ScoreStore.get()?`Din beste tur: ${formatDistance(ScoreStore.get())}`:'Din første vulkantur venter.';draw();}
   function requestQuitGame(){if(!state?.running||state.ended||state.quitConfirmOpen)return;state.quitConfirmOpen=true;state.player.jumpHeld=false;ui.quitConfirmText.textContent=state.debugMode?'Debugturen avsluttes med én gang og registreres ikke.':'Resultatet lagres som personlig rekord, men turen avsluttes med én gang.';ui.quitConfirmOverlay.classList.remove('hidden');last=performance.now();}
@@ -315,15 +356,15 @@
     if(state.weatherPhase==='clear'){state.rainClock-=dt;if(state.rainClock<=0){state.weatherPhase='darkening';state.weatherTimer=0;}}
     else if(state.weatherPhase==='darkening'){state.weatherTimer+=dt;state.skyDarkness=clamp(state.weatherTimer/3.2,0,1);if(state.weatherTimer>=3.2){state.weatherPhase='clouds-in';state.weatherTimer=0;}}
     else if(state.weatherPhase==='clouds-in'){state.weatherTimer+=dt;state.skyDarkness=1;state.stormCloudCover=clamp(state.weatherTimer/4,0,1);if(state.weatherTimer>=4){state.weatherPhase='raining';state.rainDuration=rand(10,15);state.rainStrengthDrainRemaining=state.rainHat?0:Math.min(.2,Math.max(0,state.strength-MIN_STRENGTH));state.rainStrengthDrainRate=state.rainDuration>0?state.rainStrengthDrainRemaining/state.rainDuration:0;state.rain=0;showPrompt('Huttetu - vulkanaske svir og jeg mister hoppekraft',3,true);sounds.rain();}}
-    else if(state.weatherPhase==='raining'){state.rainDuration-=dt;state.rain=clamp(state.rain+dt*.55,0,1);state.skyDarkness=1;state.stormCloudCover=1;if(!state.rainHat&&state.rainStrengthDrainRemaining>0&&state.strength>MIN_STRENGTH){const loss=Math.min(state.rainStrengthDrainRemaining,state.rainStrengthDrainRate*dt,state.strength-MIN_STRENGTH);state.strength-=loss;state.rainStrengthDrainRemaining-=loss;}if(state.rainDuration<=0){state.weatherPhase='clearing';state.weatherTimer=0;state.rainStrengthDrainRemaining=0;state.rainStrengthDrainRate=0;showPrompt('Askeregnet gir seg – skyene driver bort.',2.6);}}
+    else if(state.weatherPhase==='raining'){state.rainDuration-=dt;state.rain=clamp(state.rain+dt*.55,0,1);state.skyDarkness=1;state.stormCloudCover=1;if(!state.rainHat&&state.rainStrengthDrainRemaining>0&&state.strength>MIN_STRENGTH){const loss=Math.min(state.rainStrengthDrainRemaining,state.rainStrengthDrainRate*dt,state.strength-MIN_STRENGTH);state.strength-=loss;state.rainStrengthDrainRemaining-=loss;}if(state.rainDuration<=0){state.weatherPhase='clearing';state.weatherTimer=0;state.rainStrengthDrainRemaining=0;state.rainStrengthDrainRate=0;sounds.rainStop();showPrompt('Askeregnet gir seg – skyene driver bort.',2.6);}}
     else if(state.weatherPhase==='clearing'){state.weatherTimer+=dt;const clear=clamp(state.weatherTimer/5,0,1);state.rain=clamp(1-state.weatherTimer/1.8,0,1);state.stormCloudCover=1-clear;state.skyDarkness=1-clear;if(clear>=1){state.weatherPhase='clear';state.rain=0;state.skyDarkness=0;state.stormCloudCover=0;state.sunGlow=8;state.rainClock=rand(34,50);}}
     syncRainStrengthEffect();
     updateDragon(dt);
     if(dragonInProgress()||state.ended)return;
     if (state.distance >= 20000 && state.avalancheClock <= 0 && state.avalancheLeadIn <= 0 && state.avalancheDuration <= 0) { const d=distanceDifficulty();state.avalancheClock=rand(Math.max(7,15-d*2),Math.max(13,30-d*4)); }
-    if (state.avalancheClock > 0) { state.avalancheClock -= dt; if (state.avalancheClock <= 0) { state.avalancheLevel++;state.avalancheLeadIn=1.45;state.plannedAvalancheDuration=state.avalancheLevel===1?rand(6,8):rand(8,12);state.rumbleClock=0;sounds.rumble();showPrompt('VARSEL: LAVARAS!',3,true); } }
-    if(state.avalancheLeadIn>0){state.avalancheLeadIn-=dt;if(state.avalancheLeadIn<=0){state.avalancheLeadIn=0;state.avalancheDuration=state.plannedAvalancheDuration;state.boulderSpawn=.05;}}
-    if (state.avalancheDuration > 0) { state.avalancheDuration -= dt;state.rumbleClock-=dt;if(state.rumbleClock<=0){sounds.rumble();state.rumbleClock=rand(1.05,1.45);}if(state.avalancheDuration <= 0) { state.avalancheClock=0;showPrompt('Lavaraset er over.',2); } }
+    if (state.avalancheClock > 0) { state.avalancheClock -= dt; if (state.avalancheClock <= 0) { state.avalancheLevel++;state.avalancheLeadIn=1.45;state.plannedAvalancheDuration=state.avalancheLevel===1?rand(6,8):rand(8,12);showPrompt('VARSEL: LAVARAS!',3,true); } }
+    if(state.avalancheLeadIn>0){state.avalancheLeadIn-=dt;if(state.avalancheLeadIn<=0){state.avalancheLeadIn=0;state.avalancheDuration=state.plannedAvalancheDuration;state.boulderSpawn=.05;SfxStore.startLoop('rockfall',.55);}}
+    if (state.avalancheDuration > 0) { state.avalancheDuration -= dt;if(state.avalancheDuration <= 0) { state.avalancheClock=0;SfxStore.stopLoop('rockfall');showPrompt('Lavaraset er over.',2); } }
   }
   function collide(a, b) { return a.x < b.x+b.width && a.x+a.w > b.x && a.y < b.y+b.height && a.y+a.h > b.y; }
   function loseHeart() { state.hearts--;animateHeartLoss();sounds.splash();if(state.hearts<=0)endGame(); }
@@ -378,13 +419,29 @@
   }
   function dragonClearanceActive(){return dragonInProgress()||(state.distance>=DRAGON_START_DISTANCE&&state.dragonClock<=2&&!rockfallInProgress());}
   function dragonPose(dragon){return {x:dragon.x,y:ground-state.player.h-82+Math.sin(dragon.age*3.4)*5};}
+  // Dragen kommer saktere fremover i starten (easing), så den rekker flere angrep.
+  function dragonXAt(age){return W+140-(W+460)*Math.pow(clamp(age,0,DRAGON_FLIGHT_DURATION)/DRAGON_FLIGHT_DURATION,1.4);}
+  function dragonEvent(dragon){
+    if(dragon.events){for(const ev of dragon.events)if(dragon.age>=ev.start&&dragon.age<ev.start+DRAGON_ATTACK_WINDOW)return ev;return null;}
+    // Dragoner uten plan (tester, gamle frø) beholder den gamle flamme-kadansen.
+    const elapsed=dragon.age-DRAGON_FIRST_ATTACK_AGE,cycle=elapsed%2.1;
+    if(elapsed<0||elapsed>4.9||cycle>=1.35)return null;
+    return {type:'flame',start:dragon.age-cycle};
+  }
   function dragonFlames(dragon){
-    const elapsed=dragon.age-2,cycle=elapsed%2.1;
-    if(elapsed<0||elapsed>4.9||cycle>=1.35)return [];
-    const strength=Math.min(1,cycle/.18,(1.35-cycle)/.2);
+    const event=dragonEvent(dragon);
+    if(!event||event.type!=='flame')return [];
+    if(state.objects.some(o=>o.type==='lavaball'&&o.x+o.width>0))return [];
+    const cycle=dragon.age-event.start,strength=Math.min(1,cycle/.18,(DRAGON_ATTACK_WINDOW-cycle)/.2);
     if(strength<=.05)return [];
     const pose=dragonPose(dragon),mouthX=pose.x-76,mouthY=pose.y+18;
     return Array.from({length:23},(_,index)=>{const u=index/22;return {x:mouthX-270*strength*u,y:mouthY+16*u+Math.sin(dragon.age*20-index*.6)*2*Math.sin(u*Math.PI),r:(6+18*Math.sin(u*Math.PI))*strength};});
+  }
+  function spawnLavaBalls(dragon){
+    const pose=dragonPose(dragon),count=Math.round(rand(2.6,3.9));
+    for(let k=0;k<count;k++){const size=rand(24,34);
+      // Kuler holder seg i munnen til sin delay slipper dem, i rekkefølge.
+      addObject('lavaball',{x:pose.x-76-size*.5-W,y:pose.y+16-size*.5,width:size,height:size,holding:true,falling:false,rolling:false,vy:0,delay:.12+k*rand(.22,.36),thrown:rand(130,240),rotation:rand(0,6.28),shapeSeed:rand(0,1000)});}
   }
   function dragonTouchesPlayer(dragon,flames){
     const p=state.player;
@@ -398,11 +455,13 @@
     if(dt<=0)return;
     if(state.dragon){
       const dragon=state.dragon;
-      dragon.age+=dt;dragon.x=W+140-(W+460)*dragon.age/DRAGON_FLIGHT_DURATION;
+      dragon.age+=dt;dragon.x=dragonXAt(dragon.age);
       if(dragon.age>=DRAGON_FLIGHT_DURATION){state.dragon=null;state.dragonClock=rand(24,38);state.avalancheClock=Math.max(4,state.avalancheClock);state.riverSafeTimer=Math.max(2,state.riverSafeTimer);return;}
-      const flames=dragonFlames(dragon),breathing=flames.length>0;
-      if(breathing&&!dragon.breathing)sounds.fire();
-      dragon.breathing=breathing;
+      const event=dragonEvent(dragon),flames=dragonFlames(dragon);
+      if(event&&!dragon.breathing){dragon.breathing=true;
+        if(event.type==='flame'){sounds.fire();showPrompt('Ildpust! Hold deg på bakken.',2.2,true);}
+        else{sounds.fireball();spawnLavaBalls(dragon);showPrompt('Lavakuler! Hopp over kulene.',2.2,true);}}
+      else if(!event&&dragon.breathing)dragon.breathing=false;
       if(dragonTouchesPlayer(dragon,flames)){
         state.player.inv=1.6;state.hitShake=.16;sounds.splash();applyImpactDamage(true);
         if(!state.ended)showPrompt('Dragen traff! Løp under den – bakken er trygg.',2.6,true);
@@ -414,8 +473,17 @@
     if(state.dragonClock>0||rockfallInProgress())return;
     // Let existing rivers pass before asking the player to stay on the ground.
     if(state.objects.some(o=>o.type==='creek'&&o.x+o.width>state.player.x-8))return;
-    state.dragon={age:0,x:W+140,breathing:false};
-    sounds.rumble();showPrompt('DRAGE! Hold deg på bakken mens den spruter ild!',3.8,true);
+    // Angrepene veksler strengt mellom ildpust og lavakuler, tilfeldig starttype.
+    // Lavakuler kan bare spyttes mens dragen fortsatt er langt foran spilleren,
+    // og antall angrep skal gi 4-5 hendelser totalt per flukt.
+    const events=[],first=Math.random()<.5?'flame':'lava',count=Math.random()<.5?4:5;
+    let start=DRAGON_FIRST_ATTACK_AGE,type=first;
+    for(let k=0;k<count;k++){
+      if(type==='lava'&&dragonXAt(start)<state.player.x+DRAGON_LAVA_CLEARANCE)type='flame';
+      events.push({start,type});type=type==='flame'?'lava':'flame';start+=rand(2.15,2.6);
+    }
+    state.dragon={age:0,x:W+140,breathing:false,events};
+    sounds.rumble();showPrompt('DRAGE! Hold deg på bakken – eller hopp over lavakulene!',3.8,true);
   }
   function prepareRestStop(){
     if(state.restStop||state.distance<state.nextRestDistance-REST_STOP_APPROACH_DISTANCE)return;
@@ -460,7 +528,12 @@
     else if(state.restStop?.leaving){state.restStop.x-=state.speed*travelDt;if(state.restStop.x+REST_STOP_WIDTH<-12)state.restStop=null;}
     const p=state.player,previousBottom=p.y+p.h;if(p.jumpHeld&&p.jumpHold<.34&&p.vy<0){p.jumpHold+=dt;p.vy-=1200*(.6+state.strength*.4)*JUMP_HEIGHT_SCALE*(p.jumpBoost||1)*dt;}p.vy += 1580*JUMP_HEIGHT_SCALE*dt; p.y += p.vy * dt; if (p.y >= ground-p.h) { p.y=ground-p.h;p.vy=0;p.onGround=true;p.jumpHeld=false;p.jumpHold=0;p.airJumped=false;p.jumpBoost=1; } if (p.inv>0)p.inv-=dt;
     if(state.fireGlow>0)state.strength=clamp(state.strength+dt*.36,0,1);state.fireGlow=Math.max(0,state.fireGlow-dt);state.sunGlow=Math.max(0,state.sunGlow-dt);state.hitShake=Math.max(0,state.hitShake-dt);state.rockHitTimer=Math.max(0,state.rockHitTimer-dt);spawnWorld(travelDt);updateEvents(travelDt);if(state.ended)return;updateLightning(travelDt);
-    for (let i=state.objects.length-1;i>=0;i--) { const o=state.objects[i],rolling=o.type==='boulder'&&o.isRolling,relativeSpeed=rolling?state.speed*debugSettings.relativeRollSpeed:0,objectSpeed=state.speed+relativeSpeed;o.x-=objectSpeed*travelDt;if(rolling)o.rotation-=relativeSpeed/Math.max(16,o.width*.5)*travelDt*debugSettings.rotationSpeed;
+    for (let i=state.objects.length-1;i>=0;i--) { const o=state.objects[i],rolling=o.type==='boulder'&&o.isRolling,lavaBall=o.type==='lavaball',relativeSpeed=rolling?state.speed*debugSettings.relativeRollSpeed:lavaBall?(o.falling?o.thrown:o.rolling?state.speed*.5:0):0,objectSpeed=state.speed+relativeSpeed;o.x-=objectSpeed*travelDt;if(rolling)o.rotation-=relativeSpeed/Math.max(16,o.width*.5)*travelDt*debugSettings.rotationSpeed;
+      if(lavaBall){
+        if(o.holding){if(state.dragon){const mouth=dragonPose(state.dragon);o.x=mouth.x-76-o.width*.5;o.y=mouth.y+16-o.height*.5;}o.delay-=dt;if(o.delay<=0){o.holding=false;o.falling=true;o.vy=rand(-70,-15);}}
+        else if(o.falling){o.vy+=1520*dt;o.y+=o.vy*dt;if(o.y+o.height>=ground){o.y=ground-o.height;o.falling=false;o.rolling=true;}}
+        else o.rotation-=relativeSpeed/Math.max(14,o.width*.5)*travelDt;
+        if(!o.hit&&!o.holding&&p.inv<=0&&collide(p,{x:o.x+2,y:o.y+2,width:o.width-4,height:o.height-4})){state.objects.splice(i,1);p.inv=1.6;state.hitShake=.2;addRockImpact(p.x+p.w*.7,Math.min(p.y+p.h,ground)-2);sounds.rock();applyImpactDamage(true);if(!state.ended)showPrompt('Flammekula traff deg! Hopp over kulene.',2.6,true);continue;}}
       if(o.type==='heart'){o.bob+=dt*5;if(o.collected){o.pop+=dt*3;if(o.pop>=1)state.objects.splice(i,1);continue;}const target={x:o.x,y:o.y+Math.sin(o.bob)*4,width:o.width,height:o.height};if(collide(p,target)){state.hearts++;increaseRunSpeed();o.collected=true;o.pop=0;animateHeartGain();sounds.heart();showTutorial('heart','Du fant et hjerte','Hvert hjerte øker farten ett trinn, i tillegg til å være liv og brensel til bålet. Hvert treff på en hindring senker farten ett tilsvarende trinn.');continue;}}
       if(o.type==='fish'){if(!o.triggered&&o.x>p.x+90&&o.x<p.x+300){o.triggered=true;o.leapTime=0;}if(o.triggered){o.leapTime+=dt;const progress=o.leapTime/1.35;o.leap=progress<=1?Math.sin(progress*Math.PI):0;if(progress>1.5){o.triggered=false;o.leapTime=0;}}o.currentY=ground+9-o.leap*96;const target={x:o.x-8,y:o.currentY-o.height*.5-7,width:o.width+16,height:o.height+14};if(state.doubleJumps<state.maxFishSlots&&o.leap>.12&&collide(p,target)){const slotIndex=state.doubleJumps;state.doubleJumps++;animateFishCatch(o.x+o.width*.5,o.currentY,slotIndex);state.objects.splice(i,1);sounds.heart();showTutorial('fish','Fisk gir dobbelthopp','Hver fisk fyller ett tomt fiskespor. Trykk igjen mens Teodor er i luften for å bruke ett.');continue;}}
       if(o.type==='creek'){const targetGrowth=state.rain>0?1:0,progression=1+distanceDifficulty()*.18,maxClearable=state.speed*1.1+p.w*.5;o.rainGrowth=clamp(o.rainGrowth+(targetGrowth>o.rainGrowth?dt*.42:-dt*.08),0,1);if(!o.channelWidth)o.channelWidth=Math.min(o.baseWidth*progression,maxClearable);const wanted=o.channelWidth*(1+o.rainGrowth*.8),newWidth=Math.min(wanted,maxClearable);o.x-=(newWidth-o.width)*.5;o.width=newWidth;}
@@ -475,7 +548,7 @@
   }
   function cloud(x,y,s) {ctx.beginPath();ctx.arc(x,y,s*.25,0,7);ctx.arc(x+s*.27,y-s*.08,s*.32,0,7);ctx.arc(x+s*.58,y,s*.25,0,7);ctx.lineTo(x+s*.78,y+s*.22);ctx.lineTo(x-s*.22,y+s*.22);ctx.fill();}
   function seeded(index, salt = 0) { const v = Math.sin((index + salt * 19.19) * 127.13) * 43758.5453; return v - Math.floor(v); }
-  function mountainBand(parallax,baseY,color,facetColor,spacing,minHeight,maxHeight,salt,snowy){const world=state.backgroundOffset*parallax,first=Math.floor(world/spacing)-3,count=Math.ceil(W/spacing)+7;for(let n=0;n<count;n++){const i=first+n,center=i*spacing-world+(seeded(i,salt)-.5)*spacing*.45,width=spacing*(.9+seeded(i,salt+1)*1.15),height=H*(minHeight+seeded(i,salt+2)*(maxHeight-minHeight)),left={x:center-width*.5,y:baseY},right={x:center+width*.5,y:baseY},peak={x:center+width*(seeded(i,salt+3)-.5)*.2,y:baseY-height};const tallVolcano=height>H*(minHeight+(maxHeight-minHeight)*.62),platY=peak.y+height*.09,platX0=peak.x-width*.055,platX1=peak.x+width*.055;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(left.x,left.y);if(tallVolcano){ctx.bezierCurveTo(left.x+width*.16,baseY-height*.16,peak.x-width*.24,platY+height*.2,platX0,platY);ctx.lineTo(platX1,platY);ctx.bezierCurveTo(platX1+width*.12,platY+height*.12,right.x-width*.13,baseY-height*.14,right.x,right.y);}else{ctx.bezierCurveTo(left.x+width*.16,baseY-height*.16,peak.x-width*.24,peak.y+height*.3,peak.x,peak.y);ctx.bezierCurveTo(peak.x+width*.2,peak.y+height*.2,right.x-width*.13,baseY-height*.14,right.x,right.y);}ctx.closePath();ctx.fill();ctx.fillStyle=facetColor;ctx.globalAlpha=.34;ctx.beginPath();if(tallVolcano){ctx.moveTo(platX1,platY);}else{ctx.moveTo(peak.x,peak.y);}ctx.lineTo(right.x,right.y);ctx.lineTo(center+width*.05,baseY);if(tallVolcano){ctx.lineTo(platX1-width*.04,platY+height*.35);}else{ctx.lineTo(peak.x-width*.04,peak.y+height*.42);}ctx.closePath();ctx.fill();ctx.globalAlpha=1;if(tallVolcano){const craterW=width*.15,frontY=platY+8,eruptionPulse=.6+.4*Math.sin(state.t*3.1+i);
+  function mountainBand(parallax,baseY,color,facetColor,spacing,minHeight,maxHeight,salt,snowy){const world=state.backgroundOffset*parallax,first=Math.floor(world/spacing)-3,count=Math.ceil(W/spacing)+7;for(let n=0;n<count;n++){const i=first+n,center=i*spacing-world+(seeded(i,salt)-.5)*spacing*.45,width=spacing*(.9+seeded(i,salt+1)*1.15),height=H*(minHeight+seeded(i,salt+2)*(maxHeight-minHeight)),left={x:center-width*.5,y:baseY},right={x:center+width*.5,y:baseY},peak={x:center+width*(seeded(i,salt+3)-.5)*.2,y:baseY-height};const tallVolcano=height>H*(minHeight+(maxHeight-minHeight)*.72),platY=peak.y+height*.09,platX0=peak.x-width*.055,platX1=peak.x+width*.055;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(left.x,left.y);if(tallVolcano){ctx.bezierCurveTo(left.x+width*.16,baseY-height*.16,peak.x-width*.24,platY+height*.2,platX0,platY);ctx.lineTo(platX1,platY);ctx.bezierCurveTo(platX1+width*.12,platY+height*.12,right.x-width*.13,baseY-height*.14,right.x,right.y);}else{ctx.bezierCurveTo(left.x+width*.16,baseY-height*.16,peak.x-width*.24,peak.y+height*.3,peak.x,peak.y);ctx.bezierCurveTo(peak.x+width*.2,peak.y+height*.2,right.x-width*.13,baseY-height*.14,right.x,right.y);}ctx.closePath();ctx.fill();ctx.fillStyle=facetColor;ctx.globalAlpha=.34;ctx.beginPath();if(tallVolcano){ctx.moveTo(platX1,platY);}else{ctx.moveTo(peak.x,peak.y);}ctx.lineTo(right.x,right.y);ctx.lineTo(center+width*.05,baseY);if(tallVolcano){ctx.lineTo(platX1-width*.04,platY+height*.35);}else{ctx.lineTo(peak.x-width*.04,peak.y+height*.42);}ctx.closePath();ctx.fill();ctx.globalAlpha=1;if(tallVolcano){const craterW=width*.15,frontY=platY+8,eruptionPulse=.6+.4*Math.sin(state.t*3.1+i);
   // Bakkanten buer opp fra fjellsidene uten loddrette avslutninger.
   const rimHalf=(platX1-platX0)*.5,rimRise=6+rimHalf*(.18+seeded(i,salt+100)*.08);
   const backGrad=ctx.createLinearGradient(0,platY-rimRise,0,frontY);backGrad.addColorStop(0,color);backGrad.addColorStop(.45,'#794535');backGrad.addColorStop(1,'#c25a2a');
@@ -503,7 +576,7 @@
   for(let p=6;p>=0;p--){const puffPhase=seeded(i*7+p,salt+23),puffAge=((state.t*(.1+puffPhase*.09)+puffPhase+i*.37)%1+1)%1,puffX=peak.x+Math.sin(puffAge*5+puffPhase*9)*width*.03+puffAge*width*.075,puffY=platY-height*.05-puffAge*height*.55,puffR=9+puffAge*36+puffPhase*10;ctx.fillStyle=`rgba(30,24,28,${(1-puffAge)*.6})`;ctx.beginPath();ctx.arc(puffX,puffY,puffR,0,7);ctx.fill();ctx.fillStyle=`rgba(58,46,50,${(1-puffAge)*.35})`;ctx.beginPath();ctx.arc(puffX-puffR*.25,puffY-puffR*.2,puffR*.6,0,7);ctx.fill();}
   // Varm glød som farger den nederste røyken nedenfra.
   const glowRadius=craterW*.65,craterGlow=ctx.createRadialGradient(peak.x,platY-2,1,peak.x,platY-2,glowRadius);craterGlow.addColorStop(0,`rgba(255,122,42,${.2*eruptionPulse})`);craterGlow.addColorStop(.45,`rgba(255,122,42,${.08*eruptionPulse})`);craterGlow.addColorStop(1,'rgba(255,122,42,0)');ctx.fillStyle=craterGlow;ctx.fillRect(peak.x-glowRadius,platY-2-glowRadius,glowRadius*2,glowRadius*2);}}}
-  function mountains(){mountainBand(.03,ground+5,'#5a3a3c','#2b1a1e',330,.28,.58,2,true);mountainBand(.065,ground+12,'#4a2b26','#1f1214',300,.18,.4,9,false);}
+  function mountains(){mountainBand(.03,ground+5,'#5a3a3c','#2b1a1e',400,.28,.58,2,true);mountainBand(.065,ground+12,'#4a2b26','#1f1214',350,.18,.4,9,false);}
   function deciduousTree(x, base, s, alpha, shapeSeed=0) { const variation=salt=>{const value=Math.sin((shapeSeed*.073+s*1.91+salt*17.7)*91.73)*43758.5453;return value-Math.floor(value);};ctx.save();ctx.globalAlpha=alpha;ctx.translate(x,base);ctx.strokeStyle='#2b1a14';ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=Math.max(2,s*.09);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo((variation(1)-.5)*s*.05,-s*.78);ctx.stroke();for(let branch=0;branch<7;branch++){const direction=branch%2===0?-1:1,startY=-s*(.24+branch*.075),length=s*(.18+variation(branch+2)*.16),rise=s*(.1+variation(branch+11)*.12);let px=(variation(branch+21)-.5)*s*.035,py=startY;ctx.lineWidth=Math.max(1.4,s*(.052-branch*.003));ctx.beginPath();ctx.moveTo(px,py);for(let segment=1;segment<=2;segment++){px+=direction*length*.5+(variation(branch*3+segment+31)-.5)*s*.08;py-=rise*.5+(variation(branch*5+segment+41)-.5)*s*.055;ctx.lineTo(px,py);}ctx.stroke();}ctx.restore(); }
   function pineTree(x, base, s, alpha) { ctx.save();ctx.globalAlpha=alpha;ctx.translate(x,base);ctx.fillStyle='#2b1a14';ctx.fillRect(-s*.035,-s*.72,s*.07,s*.72);ctx.fillStyle='#183b2c';for(let i=0;i<4;i++){const y=-s*(.96-i*.19),half=s*(.19+i*.055);ctx.beginPath();ctx.moveTo(0,y-s*.25);ctx.lineTo(-half,y+s*.18);ctx.lineTo(half,y+s*.18);ctx.closePath();ctx.fill()}ctx.fillStyle='#315440';ctx.beginPath();ctx.moveTo(-s*.03,-s*1.18);ctx.lineTo(-s*.2,-s*.76);ctx.lineTo(0,-s*.83);ctx.closePath();ctx.fill();ctx.restore(); }
   function treeLayer(parallax, spacing, base, minSize, maxSize, alpha, salt) { const world=state.backgroundOffset*parallax, first=Math.floor(world/spacing)-2, count=Math.ceil(W/spacing)+5; for(let n=0;n<count;n++){const i=first+n,x=i*spacing-world+(seeded(i,salt)-.5)*spacing*.38,s=minSize+seeded(i,salt+1)*(maxSize-minSize); if(seeded(i,salt+2)>.46)pineTree(x,base,s,alpha);else deciduousTree(x,base,s,alpha,i+salt*1000);} }
@@ -566,6 +639,16 @@
     ctx.fillStyle='#1f130f';const bankLeft=bank.left[0].x,bankRight=bank.right[0].x;for(const [x,y,r] of [[bankLeft+3,ground-4,6],[bankLeft+14,ground-1,4],[bankRight-13,ground-2,4],[bankRight-2,ground-5,7]]){ctx.beginPath();ctx.ellipse(x,y,r,r*.55,0,0,7);ctx.fill();}
     ctx.restore();
   }
+  function drawLavaBall(o){const cx=o.x+o.width*.5,cy=o.y+o.height*.5,r=o.width*.5,flick=Math.sin(state.t*15+(o.shapeSeed||0)*7)*.16;ctx.save();ctx.translate(cx,cy);ctx.shadowColor='#ff8b25';ctx.shadowBlur=o.rolling?10:18;
+  // Ildhale som strekker seg bak kulens bevegelsesretning.
+  ctx.fillStyle='#ef4a19';ctx.beginPath();
+  if(o.rolling){ctx.moveTo(-r*.1,-r*.7);ctx.quadraticCurveTo(r*(1.8+flick),-r*.5,r*(2.1+flick),0);ctx.quadraticCurveTo(r*(1.8+flick),r*.55,-r*.1,r*.75);}
+  else{ctx.moveTo(-r*.65,r*.55);ctx.quadraticCurveTo(-r*(.15+flick),-r*1.6,0,-r*(1.9+flick));ctx.quadraticCurveTo(r*(.55-flick),-r*1.4,r*.8,r*.35);}
+  ctx.closePath();ctx.fill();
+  ctx.fillStyle='#ff7924';ctx.beginPath();ctx.arc(0,o.rolling?0:r*.12,r*.82,0,7);ctx.fill();
+  ctx.fillStyle='#ffe388';ctx.beginPath();ctx.arc(-r*.16,o.rolling?0:r*.16,r*.48,0,7);ctx.fill();
+  ctx.fillStyle='#fff6cf';ctx.beginPath();ctx.arc(-r*.32,o.rolling?0:r*.22,r*.2,0,7);ctx.fill();
+  ctx.restore();}
   function drawHeart(o){const x=o.x+o.width/2,y=o.y+o.height/2+Math.sin(o.bob)*4,pop=o.collected?o.pop:0,scale=o.collected?1+Math.sin(Math.min(1,pop)*Math.PI)*1.8:1;ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.globalAlpha=o.collected?clamp(1-(pop-.55)*2.2,0,1):1;ctx.fillStyle='#ff8e7c';ctx.shadowColor='#ffe9a3';ctx.shadowBlur=13;ctx.beginPath();ctx.moveTo(0,9);ctx.bezierCurveTo(-22,-5,-10,-16,0,-7);ctx.bezierCurveTo(10,-16,22,-5,0,9);ctx.fill();ctx.restore();if(o.collected){ctx.save();ctx.translate(x,y);ctx.strokeStyle=`rgba(255,241,181,${1-pop})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,12+pop*42,0,7);ctx.stroke();ctx.fillStyle=`rgba(255,211,157,${1-pop})`;for(let i=0;i<8;i++){const a=i*Math.PI/4,r=15+pop*38;ctx.beginPath();ctx.arc(Math.cos(a)*r,Math.sin(a)*r,3*(1-pop),0,7);ctx.fill()}ctx.restore();}}
   function drawFish(o){if(o.leap<=.02)return;const x=o.x+o.width*.5,y=o.currentY,progress=clamp(o.leapTime/1.35,0,1),turn=-.72+progress*1.44;ctx.save();ctx.translate(x,y);ctx.rotate(turn);ctx.strokeStyle='#fffaf0';ctx.lineWidth=2.2;ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowColor='#d6f5ee';ctx.shadowBlur=8;
     // Halebein og ryggsøyle beholder samme lengde som den gamle fiskesilhuetten.
@@ -587,23 +670,23 @@
   function drawSun(){const x=W*.78,y=H*.16,shine=state.sunGlow>0?.35+.2*Math.sin(state.t*7):.18;ctx.save();ctx.globalAlpha=clamp(1-state.skyDarkness,0,1);ctx.translate(x,y);ctx.strokeStyle=`rgba(255,150,80,${shine})`;ctx.lineWidth=3;for(let i=0;i<12;i++){const a=i*Math.PI/6;ctx.beginPath();ctx.moveTo(Math.cos(a)*31,Math.sin(a)*31);ctx.lineTo(Math.cos(a)*(43+shine*20),Math.sin(a)*(43+shine*20));ctx.stroke()}ctx.fillStyle='#ff7a2a';ctx.shadowColor='#ff4a12';ctx.shadowBlur=30;ctx.beginPath();ctx.arc(0,0,23,0,7);ctx.fill();ctx.restore();}
   function stormClouds(){const cover=state.stormCloudCover;if(cover<=0)return;const eased=cover*cover*(3-2*cover);ctx.save();ctx.globalAlpha=.72+.22*cover;for(let i=0;i<9;i++){const s=82+seeded(i,31)*78,targetX=W*(.04+i/8*.9),fromLeft=i%2===0,startX=fromLeft?-s*1.5:W+s*1.5,x=startX+(targetX-startX)*eased+Math.sin(state.t*.35+i)*5,y=H*(.055+seeded(i,32)*.13);ctx.fillStyle=i%3===0?'#2d414a':'#394f57';ctx.beginPath();ctx.ellipse(x-s*.28,y+s*.04,s*.38,s*.2,0,0,7);ctx.ellipse(x,y-s*.09,s*.37,s*.29,0,0,7);ctx.ellipse(x+s*.33,y,s*.4,s*.22,0,0,7);ctx.fill();ctx.fillStyle='#243840';ctx.beginPath();ctx.ellipse(x,y+s*.11,s*.62,s*.18,0,0,7);ctx.fill()}ctx.restore();}
   function rainLayer(count,speed,length,lineWidth,alpha,salt){const spanY=H+length*3,spanX=W+180,gust=.14+Math.sin(state.t*.42)*.025;ctx.lineWidth=lineWidth;ctx.strokeStyle=`rgba(218,245,246,${alpha*state.rain})`;for(let i=0;i<count;i++){const travel=(state.t*speed+seeded(i,salt)*spanY)%spanY,y=travel-length*1.5,baseX=seeded(i,salt+1)*spanX-90,x=(baseX+travel*gust+state.t*(10+seeded(i,salt+2)*8))%spanX-45,slant=length*(.38+Math.sin(state.t*.35+i)*.04);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+slant,y+length);ctx.stroke();}}
-  function updateLightning(dt){state.flash=Math.max(0,state.flash-dt*2.2);if(state.bolt){state.bolt.age+=dt;if(state.bolt.age>.45)state.bolt=null;}if(state.thunderClock>0){state.thunderClock-=dt;if(state.thunderClock<=0){state.thunderClock=0;sounds.rumble();}}if(state.weatherPhase==='raining'){state.lightningClock-=dt;if(state.lightningClock<=0){strikeLightning();state.lightningClock=rand(2.5,7);}}}
-  function strikeLightning(){const x0=W*(.08+Math.random()*.84),pts=[[x0,-12]];let bx=x0;const segs=9;for(let g=1;g<=segs;g++){bx+=(Math.random()-.5)*56;pts.push([bx,-12+(ground+24)*g/segs]);}const branches=[],nBr=2+Math.floor(Math.random()*3);for(let b=0;b<nBr;b++){const si=2+Math.floor(Math.random()*(segs-3)),st=pts[si],dir=Math.random()<.5?-1:1,bpts=[[st[0],st[1]]];let px=st[0],py=st[1];const bl=3+Math.floor(Math.random()*3);for(let g=1;g<=bl;g++){px+=dir*(10+Math.random()*22);py+=26+Math.random()*30;bpts.push([px,py]);}branches.push(bpts);}state.bolt={pts,branches,age:0};state.flash=1;state.thunderClock=rand(.4,1.4);}
+  function updateLightning(dt){state.flash=Math.max(0,state.flash-dt*2.2);if(state.bolt){state.bolt.age+=dt;if(state.bolt.age>.45)state.bolt=null;}if(state.thunderClock>0){state.thunderClock-=dt;if(state.thunderClock<=0){state.thunderClock=0;sounds.thunder();}}if(state.weatherPhase==='raining'){state.lightningClock-=dt;if(state.lightningClock<=0){strikeLightning();state.lightningClock=rand(2.5,7);}}}
+  function strikeLightning(){sounds.lightning();const x0=W*(.08+Math.random()*.84),pts=[[x0,-12]];let bx=x0;const segs=9;for(let g=1;g<=segs;g++){bx+=(Math.random()-.5)*56;pts.push([bx,-12+(ground+24)*g/segs]);}const branches=[],nBr=2+Math.floor(Math.random()*3);for(let b=0;b<nBr;b++){const si=2+Math.floor(Math.random()*(segs-3)),st=pts[si],dir=Math.random()<.5?-1:1,bpts=[[st[0],st[1]]];let px=st[0],py=st[1];const bl=3+Math.floor(Math.random()*3);for(let g=1;g<=bl;g++){px+=dir*(10+Math.random()*22);py+=26+Math.random()*30;bpts.push([px,py]);}branches.push(bpts);}state.bolt={pts,branches,age:0};state.flash=1;state.thunderClock=rand(.4,1.4);}
   function drawLightning(){const bolt=state.bolt;if(!bolt)return;const alpha=clamp(1-bolt.age/.45,0,1);if(alpha<=0)return;ctx.save();ctx.lineJoin='round';ctx.lineCap='round';ctx.shadowColor='#bfe0ff';ctx.shadowBlur=18;const stroke=(pts,w)=>{ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let k=1;k<pts.length;k++)ctx.lineTo(pts[k][0],pts[k][1]);ctx.stroke();};ctx.strokeStyle=`rgba(159,208,255,${alpha})`;stroke(bolt.pts,3.5);for(const b of bolt.branches)stroke(b,1.6);ctx.shadowBlur=0;ctx.strokeStyle=`rgba(255,255,255,${alpha})`;stroke(bolt.pts,1.4);for(const b of bolt.branches)stroke(b,.8);ctx.restore();}
   function rain(){const intensity=state.rain;if(intensity<=0)return;ctx.save();ctx.lineCap='round';rainLayer(Math.floor(48*intensity),330,11,1,.34,51);rainLayer(Math.floor(72*intensity),510,19,1.35,.5,61);rainLayer(Math.floor(48*intensity),760,29,2,.72,71);const mist=ctx.createLinearGradient(0,ground-55,0,ground+65);mist.addColorStop(0,'rgba(205,235,232,0)');mist.addColorStop(1,`rgba(190,224,220,${.16*intensity})`);ctx.fillStyle=mist;ctx.fillRect(0,ground-55,W,120);ctx.strokeStyle=`rgba(223,249,244,${.42*intensity})`;ctx.fillStyle=`rgba(255,214,120,${.48*intensity})`;ctx.lineWidth=1.2;const impacts=Math.floor(25*intensity);for(let i=0;i<impacts;i++){const cycle=(state.t*(1.5+seeded(i,82)*1.8)+seeded(i,83))%1;if(cycle<.72)continue;const x=(seeded(i,84)*W+state.t*(34+seeded(i,85)*20))%W,y=ground+2,r=(cycle-.72)/.28*(5+seeded(i,86)*6);ctx.beginPath();ctx.arc(x,y,r,Math.PI*1.08,Math.PI*1.92);ctx.stroke();ctx.beginPath();ctx.arc(x-r*.25,y-r*.5,1.2,0,7);ctx.fill();ctx.beginPath();ctx.arc(x+r*.3,y-r*.72,1,0,7);ctx.fill();}ctx.restore();}
   function draw(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#402732';ctx.fillRect(0,0,W,H);const avalancheShake=state.avalancheLeadIn>0?Math.min(7,3.2+state.avalancheLevel*.4+distanceDifficulty()*.2):0,hitForce=clamp(state.hitShake/.24,0,1),shake=avalancheShake+hitForce*9;ctx.save();if(shake>0)ctx.translate(Math.sin(state.t*51)*shake,Math.sin(state.t*37+1.4)*shake*.55);const sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#2e1a26');sky.addColorStop(.55,'#7a3a2e');sky.addColorStop(1,'#e08a5a');ctx.fillStyle=sky;ctx.fillRect(-10,-10,W+20,H+20);
     // Godværshimmelen tones bort når uværet kommer, og frem igjen når det klarner.
     if(state.skyDarkness<1){const clearSky=ctx.createLinearGradient(0,0,0,H);clearSky.addColorStop(0,'#397eae');clearSky.addColorStop(.55,'#a67b70');clearSky.addColorStop(1,'#e08a5a');ctx.save();ctx.globalAlpha=1-state.skyDarkness;ctx.fillStyle=clearSky;ctx.fillRect(-10,-10,W+20,H+20);ctx.restore();}
     if(state.skyDarkness>0){ctx.fillStyle=`rgba(30,50,60,${state.skyDarkness*.5})`;ctx.fillRect(-10,-10,W+20,H+20)}if(state.flash>0){ctx.fillStyle=`rgba(255,246,214,${state.flash*.5})`;ctx.fillRect(-10,-10,W+20,H+20)}drawSun();ctx.save();ctx.globalAlpha=1-state.skyDarkness*.72;ctx.fillStyle='#5a3a3599';cloud(W*.2-state.backgroundOffset*.025,H*.13,95);cloud(W*.7-state.backgroundOffset*.018,H*.2,125);ctx.restore();mountains();
-    treeLayer(.12,118,ground+8,80,115,.58,4);treeLayer(.23,155,ground+10,108,158,.95,11);ctx.fillStyle='#4a2e28';ctx.fillRect(0,ground,W,H-ground);drawGroundDetails(); // Detaljer under stien hoppes over der lavaelvene ligger.
-    for(const o of state.objects)if(o.type==='bush')foregroundBush(o);for(const o of state.objects)if(o.type==='creek')drawCreek(o);for(const o of state.objects){if(o.type==='heart')drawHeart(o);else if(o.type==='boulder')drawBoulder(o);else if(o.type==='fish')drawFish(o)}
+    treeLayer(.12,118,ground+8,80,115,.58,4);treeLayer(.23,155,ground+10,108,158,.95,11);ctx.fillStyle='#194027';ctx.fillRect(0,ground,W,H-ground);drawGroundDetails(); // Detaljer under stien hoppes over der lavaelvene ligger.
+    for(const o of state.objects)if(o.type==='bush')foregroundBush(o);for(const o of state.objects)if(o.type==='creek')drawCreek(o);for(const o of state.objects){if(o.type==='heart')drawHeart(o);else if(o.type==='boulder')drawBoulder(o);else if(o.type==='fish')drawFish(o);else if(o.type==='lavaball')drawLavaBall(o)}
     drawRondaneSign();drawRestStop();drawMarit();drawRockImpacts();drawBonfire();drawSplashes();stormClouds();drawDragon();rain();drawLightning();ctx.restore();
   }
   function loop(now){if(!state?.running)return;const dt=Math.min(.033,(now-last)/1000);last=now;const heartAnimationChanged=updateHeartLossAnimation(dt),gameplayActive=!state.paused&&!state.tutorialPaused&&!state.shopOpen&&!state.quitConfirmOpen&&!orientationBlocked;if(gameplayActive)update(dt);else if(heartAnimationChanged)updateUI();draw();if(state.running)raf=requestAnimationFrame(loop);}
   canvas.addEventListener('pointerdown',e=>{e.preventDefault();const rect=canvas.getBoundingClientRect(),x=(e.clientX-rect.left)*W/rect.width,y=(e.clientY-rect.top)*H/rect.height,bounds=state?.restTimer>0?restShopBounds():null;if(bounds&&x>=bounds.x&&x<=bounds.x+bounds.width&&y>=bounds.y&&y<=bounds.y+bounds.height){openShop();return;}canvas.setPointerCapture?.(e.pointerId);startJump();});canvas.addEventListener('pointerup',e=>{e.preventDefault();endJump();});canvas.addEventListener('pointercancel',endJump);
   ui.frame.addEventListener('selectstart',e=>{if(state?.running)e.preventDefault();});ui.frame.addEventListener('contextmenu',e=>{if(state?.running)e.preventDefault();});ui.frame.addEventListener('dragstart',e=>{if(state?.running)e.preventDefault();});
   document.addEventListener('pointerdown',recoverAudioFromGesture,{capture:true,passive:true});document.addEventListener('keydown',recoverAudioFromGesture,{capture:true});document.addEventListener('visibilitychange',()=>{if(document.hidden)audioRecoveryNeeded=Boolean(audio);else if(audio)initAudio();});window.addEventListener('pagehide',()=>{audioRecoveryNeeded=Boolean(audio);});window.addEventListener('pageshow',()=>{if(audio)initAudio();});
-  for(const button of [ui.bonfire,ui.pause,ui.quit,ui.sound,ui.fullscreen,ui.tutorialContinue,ui.fullscreenHelpClose,ui.restContinue,ui.shopClose,ui.shopUndo,ui.snackButton,ui.quitConfirm,ui.quitCancel,ui.howToPlayOpen,ui.howToPlayBack,ui.priceEditorSave,ui.priceEditorDefaults,ui.priceEditorCancel,ui.leaderboardRefresh,...ui.shopItems])button.addEventListener('pointerdown',e=>e.stopPropagation());ui.bonfire.addEventListener('click',bonfire);ui.pause.addEventListener('click',togglePause);ui.quit.addEventListener('click',requestQuitGame);ui.quitConfirm.addEventListener('click',confirmQuitGame);ui.quitCancel.addEventListener('click',cancelQuitGame);ui.fullscreen.addEventListener('click',toggleFullscreen);ui.fullscreenHelpClose.addEventListener('click',closeFullscreenHelp);ui.tutorialContinue.addEventListener('click',continueTutorial);ui.restContinue.addEventListener('click',continueRestStop);ui.shopClose.addEventListener('click',closeShop);ui.shopUndo.addEventListener('click',undoShopPurchases);ui.snackButton.addEventListener('click',useKvikklunsj);ui.howToPlayOpen.addEventListener('click',openHowToPlay);ui.howToPlayBack.addEventListener('click',closeHowToPlay);ui.priceEditorForm.addEventListener('submit',savePriceEditor);ui.priceEditorDefaults.addEventListener('click',useDefaultShopPrices);ui.priceEditorCancel.addEventListener('click',closePriceEditor);ui.leaderboardRefresh.addEventListener('click',loadLeaderboard);ui.shopItems.forEach(button=>button.addEventListener('click',()=>buyShopItem(button.dataset.shopItem)));ui.sound.addEventListener('click',()=>{muted=!muted;ui.sound.textContent=muted?'×':'♫';ui.sound.setAttribute('aria-label',muted?'Skru på lyd':'Skru av lyd');if(!muted)initAudio(audioRecoveryNeeded);});
+  for(const button of [ui.bonfire,ui.pause,ui.quit,ui.sound,ui.fullscreen,ui.tutorialContinue,ui.fullscreenHelpClose,ui.restContinue,ui.shopClose,ui.shopUndo,ui.snackButton,ui.quitConfirm,ui.quitCancel,ui.howToPlayOpen,ui.howToPlayBack,ui.priceEditorSave,ui.priceEditorDefaults,ui.priceEditorCancel,ui.leaderboardRefresh,...ui.shopItems])button.addEventListener('pointerdown',e=>e.stopPropagation());ui.bonfire.addEventListener('click',bonfire);ui.pause.addEventListener('click',togglePause);ui.quit.addEventListener('click',requestQuitGame);ui.quitConfirm.addEventListener('click',confirmQuitGame);ui.quitCancel.addEventListener('click',cancelQuitGame);ui.fullscreen.addEventListener('click',toggleFullscreen);ui.fullscreenHelpClose.addEventListener('click',closeFullscreenHelp);ui.tutorialContinue.addEventListener('click',continueTutorial);ui.restContinue.addEventListener('click',continueRestStop);ui.shopClose.addEventListener('click',closeShop);ui.shopUndo.addEventListener('click',undoShopPurchases);ui.snackButton.addEventListener('click',useKvikklunsj);ui.howToPlayOpen.addEventListener('click',openHowToPlay);ui.howToPlayBack.addEventListener('click',closeHowToPlay);ui.priceEditorForm.addEventListener('submit',savePriceEditor);ui.priceEditorDefaults.addEventListener('click',useDefaultShopPrices);ui.priceEditorCancel.addEventListener('click',closePriceEditor);ui.leaderboardRefresh.addEventListener('click',loadLeaderboard);ui.shopItems.forEach(button=>button.addEventListener('click',()=>buyShopItem(button.dataset.shopItem)));ui.sound.addEventListener('click',()=>{muted=!muted;ui.sound.textContent=muted?'×':'♫';ui.sound.setAttribute('aria-label',muted?'Skru på lyd':'Skru av lyd');if(muted)SfxStore.stopAllLoops();else{initAudio(audioRecoveryNeeded);if(state?.weatherPhase==='raining')SfxStore.startLoop('rain',.42);}});
   ui.debugRotation.addEventListener('input',()=>{const value=Number(ui.debugRotation.value);if(Number.isFinite(value))debugSettings.rotationSpeed=clamp(value,0,2);});ui.debugRollSpeed.addEventListener('input',()=>{const value=Number(ui.debugRollSpeed.value);if(Number.isFinite(value))debugSettings.relativeRollSpeed=clamp(value,1,100)/100;});ui.debugRollingShare.addEventListener('input',()=>{const value=Number(ui.debugRollingShare.value);if(Number.isFinite(value))debugSettings.rollingShare=clamp(value,0,100);});ui.helpToggles.forEach(toggle=>toggle.addEventListener('change',event=>setHelpVisibility(event.target.checked)));
   window.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();if(!e.repeat){if(state?.tutorialPaused)continueTutorial();else if(state?.restTimer>0&&!state.shopOpen)continueRestStop();else startJump();}}if(e.code==='Escape'&&!e.repeat){if(!ui.priceEditorOverlay.classList.contains('hidden'))closePriceEditor();else if(state?.quitConfirmOpen)cancelQuitGame();else if(state?.shopOpen)closeShop();else if(!ui.howToPlay.classList.contains('hidden'))closeHowToPlay();}if(e.code==='KeyB'&&!e.repeat)bonfire();if(e.code==='KeyK'&&!e.repeat)useKvikklunsj();if(e.code==='KeyP'&&!e.repeat)togglePause();if(e.code==='KeyQ'&&!e.repeat)requestQuitGame();});window.addEventListener('keyup',e=>{if(e.code==='Space'){e.preventDefault();endJump();}});ui.difficultyButtons.forEach(button=>button.addEventListener('click',()=>startGame(button.dataset.difficulty)));document.querySelector('#restartButton').addEventListener('click',()=>startGame());document.querySelector('#stoneDebugButton').addEventListener('click',requestDebugRockfall);ui.scoreForm.addEventListener('submit',submitScore);
   document.querySelector('#priceEditorButton').addEventListener('click',requestPriceEditor);

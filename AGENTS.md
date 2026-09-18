@@ -29,7 +29,7 @@ En funksjonell endring er ikke ferdig før alle kontrollene over er kjørt (`nod
 - Fart/hopp er skalert via `JUMP_HEIGHT_SCALE` og `VIRTUAL_WORLD_WIDTH` (fast logisk bredde 960) – endre ikke disse isolert, de påvirker spillfølelse på tvers av skjermstørrelser.
 - Vanskelighetsgrader ligger i `DIFFICULTIES`; butikkvarer i `SHOP_CATALOG` + `PRICE_EDITOR_FIELDS` + `shop-prices.json` (tre steder som må holdes i sync).
 - Spillerfiguren tegnes i `drawMarit` (løping) og `drawIntroMarit` (intro/hvile, sett forfra) – ansikt/hår endres begge steder ved behov.
-- Dragemonsteret (`updateDragon`/`drawDragon`/`dragonFlames`) starter ved 40 km (`DRAGON_START_DISTANCE`), fluer over spilleren og tapper hjerter ved treff. Det må ikke overlappe lavaras (`rockfallInProgress()`) eller hyttebesøk, og elver stanses mens det holder seg i luften (`dragonClearanceActive()`). Testene håndhever disse interaksjonene.
+- Dragemonsteret (`updateDragon`/`drawDragon`/`dragonEvent`/`dragonFlames`) starter ved 40 km (`DRAGON_START_DISTANCE`). Planen bygges ved spawn (`dragon.events`): 4-5 angrep som veksler strengt mellom ildpust (u_far på bakken, farlig i luften) og lavakuler som sprettes og ruller langs bakken (hopp over; treff gir steinskade). Regler testene håndhever: aldri flammer mens lavakuler er på skjermen (`dragonFlames` returnerer `[]`), lavakuler spyttes bare mens dragen er langt unna (`DRAGON_LAVA_CLEARANCE`), og angrep må ikke overlappe lavaras eller hyttebesøk. Dragoner uten `events` (tester, gamle frø) faller tilbake til den gamle flamme-kadansen.
 
 ## Verifiseringsfaller (har knekt spillet før)
 

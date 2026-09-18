@@ -1,4 +1,4 @@
-const assert = require('node:assert/strict');
+﻿const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
 
@@ -19,7 +19,7 @@ function dragonWorld(overrides = {}) {
   const constants = [...source.matchAll(/  const DRAGON_\w+ = [^;]+;/g)].map(match => match[0]).join('\n');
   const collide = (a, b) => a.x < b.x+b.width && a.x+a.w > b.x && a.y < b.y+b.height && a.y+a.h > b.y;
   const fakeMath = Object.create(Math);fakeMath.random = () => .1;
-  const api = Function('state', 'W', 'ground', 'rand', 'clamp', 'sounds', 'showPrompt', 'collide', 'endGame', 'animateRockHeartLoss', 'decreaseRunSpeed', 'syncRainStrengthEffect', 'MIN_STRENGTH', 'REST_STOP_RIVER_CLEARANCE_DISTANCE', 'debugSettings', 'Math', `
+  const api = Function('state', 'W', 'ground', 'rand', 'clamp', 'sounds', 'showPrompt', 'collide', 'endGame', 'animateRockHeartLoss', 'decreaseRunSpeed', 'syncRainStrengthEffect', 'MIN_STRENGTH', 'REST_STOP_RIVER_CLEARANCE_DISTANCE', 'debugSettings', 'Math', 'SfxStore', `
     ${constants}
     ${section('  function addObject(', '  function updateEvents(')}
     ${section('  function updateEvents(', '  function collide(')}
@@ -27,8 +27,9 @@ function dragonWorld(overrides = {}) {
     ${section('  function rockfallInProgress(', '  function prepareRestStop(')}
     return {updateEvents, updateDragon, dragonFlames, dragonTouchesPlayer, dragonClearanceActive, rockfallInProgress, spawnWorld, applyImpactDamage};
   `)(state, 960, 420, (min, max) => (min+max)/2, (v, min, max) => Math.max(min, Math.min(max, v)),
-    { fire(){effects.flameSounds++;}, rumble(){}, rain(){}, splash(){} }, text => effects.prompts.push(text), collide,
-    () => {state.ended=true;}, (...args) => effects.heartAnimations.push(args), () => effects.speedDrops++, () => {}, .05, 700, {rollingShare:70}, fakeMath);
+    { fire(){effects.flameSounds++;}, bonfire(){effects.flameSounds++;}, rumble(){}, rain(){}, rainStop(){}, splash(){}, thunder(){}, fireball(){effects.flameSounds++;} }, text => effects.prompts.push(text), collide,
+    () => {state.ended=true;}, (...args) => effects.heartAnimations.push(args), () => effects.speedDrops++, () => {}, .05, 700, {rollingShare:70}, fakeMath,
+    { startLoop(){return false;}, stopLoop(){}, stopAllLoops(){} });
   return {state, effects, ...api};
 }
 
@@ -75,7 +76,7 @@ test('rockfall clock cannot start a rockfall during the entire dragon flight', (
   const world=dragonWorld({avalancheClock:.001});
   world.updateEvents(.016);
   assert.ok(world.state.dragon);
-  for(let frame=0;frame<600&&world.state.dragon;frame++){
+  for(let frame=0;frame<1000&&world.state.dragon;frame++){
     assert.equal(world.state.avalancheClock,.001);
     world.spawnWorld(.016);world.updateEvents(.016);
     assert.equal(world.state.avalancheLeadIn,0);
@@ -90,7 +91,7 @@ test('rockfall clock cannot start a rockfall during the entire dragon flight', (
 
 test('grounded players are safe from the body and every fire pulse', () => {
   const world=dragonWorld();world.updateDragon(.016);
-  for(let frame=0;frame<550;frame++){
+  for(let frame=0;frame<950;frame++){
     world.updateDragon(.016);
     if(!world.state.dragon)break;
     for(const f of world.dragonFlames(world.state.dragon)){
@@ -104,7 +105,7 @@ test('grounded players are safe from the body and every fire pulse', () => {
 });
 
 test('jumping into fire applies stone damage and respects damage invulnerability', () => {
-  const world=dragonWorld({dragon:{age:4.3,x:407,breathing:false}});
+  const world=dragonWorld({dragon:{age:8.75,x:407,breathing:false,events:[{start:8.2,type:'flame'}]}});
   const flame=world.dragonFlames(world.state.dragon)[14];
   Object.assign(world.state.player,{x:flame.x-16,y:flame.y-30,onGround:false});
   world.updateDragon(.016);
@@ -118,10 +119,26 @@ test('jumping into fire applies stone damage and respects damage invulnerability
   assert.ok(world.effects.flameSounds>0);
 });
 
+test('lava volleys replace flames and never overlap them', () => {
+  const world=dragonWorld({dragon:{age:5.85,x:760,events:[{start:5.8,type:'lava'},{start:9.4,type:'flame'}]}});
+  world.updateDragon(.016);
+  const balls=world.state.objects.filter(o=>o.type==='lavaball');
+  assert.ok(balls.length>=2&&balls.length<=3,'a lava volley spawns rolling balls');
+  assert.ok(balls.every(b=>b.holding),'balls emerge one by one from the mouth');
+  assert.ok(Math.abs(balls[0].x-(world.state.dragon.x-76-balls[0].width*.5))<1,'the first ball sits in the mouth');
+  assert.deepEqual(world.dragonFlames(world.state.dragon),[],'no flames during a lava volley');
+  assert.ok(world.state.dragon.breathing,'the dragon opens its mouth to spit');
+  assert.equal(world.state.hearts,5,'a grounded player must be safe from a volley');
+  world.state.dragon.age=9.5;
+  assert.deepEqual(world.dragonFlames(world.state.dragon),[],'no flames while lava balls remain on screen');
+  world.state.objects=[];
+  assert.ok(world.dragonFlames(world.state.dragon).length>0,'flames resume once the ground is clear');
+});
+
 test('dragon and stone damage use identical rounding for small and large heart totals', () => {
   for(const [before,after] of [[1,0],[2,1],[3,2],[4,2],[5,3],[10,7],[15,10],[100,70]]){
     const stone=dragonWorld({hearts:before});stone.applyImpactDamage();
-    const dragon=dragonWorld({hearts:before,dragon:{age:4.3,x:407,breathing:false}});
+    const dragon=dragonWorld({hearts:before,dragon:{age:8.75,x:407,breathing:false,events:[{start:8.2,type:'flame'}]}});
     const flame=dragon.dragonFlames(dragon.state.dragon)[14];
     Object.assign(dragon.state.player,{x:flame.x-16,y:flame.y-30,onGround:false});
     dragon.updateDragon(.016);
@@ -138,7 +155,7 @@ test('airborne players outside the flames are not hit', () => {
 });
 
 test('a final airborne hit ends the run', () => {
-  const world=dragonWorld({hearts:1,dragon:{age:4.3,x:407,breathing:false}});
+  const world=dragonWorld({hearts:1,dragon:{age:8.75,x:407,breathing:false,events:[{start:8.2,type:'flame'}]}});
   const flame=world.dragonFlames(world.state.dragon)[14];
   Object.assign(world.state.player,{x:flame.x-16,y:flame.y-30,onGround:false});
   world.updateEvents(.016);
